@@ -44,7 +44,7 @@ def main() :
     
     retriever.build_faiss()
     scores, indices = retriever.retrieve(query, data_args.top_k_retrieval)
-    print(indices)
+
     with open(data_args.all_context_path, 'r') as file :
         all_context = json.load(file)
     
