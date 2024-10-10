@@ -175,7 +175,8 @@ class Retriever :
                 }
                 outputs = self.passage_encoder(**inputs)
                 embeddings.append(outputs.cpu())
-                self.logger.info(f"Step [{step}/{len(loader)}] done.")
+                if step % 100 == 0 :
+                    self.logger.info(f"Step [{step}/{len(loader)}] done.")
         
         embeddings = torch.cat(embeddings, dim = 0)
         self.passage_embeddings = embeddings
