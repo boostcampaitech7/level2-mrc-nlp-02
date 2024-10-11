@@ -97,13 +97,10 @@ class Retriever :
                 if step % training_args.logging_steps == 0:
                     self.logger.info(f"Fold {fold+1} Epoch [{epoch}/{training_args.num_train_epochs}] Step [{step}/{len(train_loader)}] train loss : {loss.item():.4f}")
                 wandb.log({
-                    f'train_loss_fold_{fold+1}' : loss.item(),
-                    # 'step' : global_step
+                    f'train_loss_fold_{fold+1}' : loss.item()
                 })
-
                 wandb.log({
-                    f'learning_rate_fold_{fold+1}' : scheduler.get_last_lr()[0],
-                    # 'step' : global_step
+                    f'learning_rate_fold_{fold+1}' : scheduler.get_last_lr()[0]
                 })
 
                 loss.backward()
@@ -118,8 +115,7 @@ class Retriever :
             val_loss = self.evaluate(val_loader)
             self.logger.info(f"Fold {fold+1} Epoch [{epoch}/{training_args.num_train_epochs}] validation loss : {val_loss:.4f}")
             wandb.log({
-                f'val_loss_fold_{fold+1}' : val_loss,
-                # f'epoch' : epoch+1
+                f'val_loss_fold_{fold+1}' : val_loss
             })
 
     def evaluate(self, val_loader) :
@@ -161,7 +157,6 @@ class Retriever :
 
         return val_loss / len(val_loader) 
 
-
     def calculate_embedding(self, loader) :
         embeddings = []
         self.passage_encoder.to(self.device)
@@ -181,15 +176,13 @@ class Retriever :
         embeddings = torch.cat(embeddings, dim = 0)
         self.passage_embeddings = embeddings
 
-    def save_embedding(self, output_dir) :
-        file_path = os.path.join(output_dir, "embeddings.pt")
+    def save_embedding(self, output_dir, file_name = "embeddings.pt") :
+        file_path = os.path.join(output_dir, file_name)
         torch.save(self.passage_embeddings, file_path)
-        self.logger.info(f"Embedding saved in {file_path}")
 
-    def load_embedding(self, output_dir) :
-        file_path = os.path.join(output_dir, "embeddings.pt")
+    def load_embedding(self, output_dir, file_name = "embeddings.pt") :
+        file_path = os.path.join(output_dir, file_name)
         self.passage_embeddings = torch.load(file_path)
-        self.logger.info(f"Embedding loaded at {file_path}")
         
     def save_model(self, path) :
         torch.save({

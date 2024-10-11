@@ -18,7 +18,7 @@ class RetrieverArguments:
         }
     )
     model_name_or_path: str = field(
-        default="bert-base-multilingual-cased",
+        default="klue/bert-base", # "bert-base-multilingual-cased",
         metadata={
             "help": "Path to pretrained model or model identifier from huggingface.co/models"  
             # 사전 학습된 모델의 경로 또는 모델 식별자를 지정합니다.

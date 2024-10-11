@@ -22,7 +22,7 @@ def main() :
 
     retriever_args, data_args, training_args = parser.parse_args_into_dataclasses()
     
-    logger = setup_logger(training_args.output_dir)
+    logger = setup_logger(training_args.output_dir, log_file_name="inference.txt")
 
     tokenizer = AutoTokenizer.from_pretrained(
         retriever_args.tokenizer_name
@@ -44,16 +44,16 @@ def main() :
     
     retriever.build_faiss()
     scores, indices = retriever.retrieve(query, data_args.top_k_retrieval)
-    print(indices)
+    
     with open(data_args.all_context_path, 'r') as file :
         all_context = json.load(file)
     
     for i in range(data_args.num_sample) :
-        print(f"{i}'s Query : {query[i]}")
-        print(f"{i}'s ground truth : {ground_truth[i]}")
+        logger.info(f"{i}'s Query : {query[i]}")
+        logger.info(f"{i}'s ground truth : {ground_truth[i]}")
         for j in range(data_args.top_k_retrieval) :
-            print(f"Top-{j+1} passage with score {scores[i][j]:.4f}")
-            print(all_context[indices[i][j]]['context'])
+            logger.info(f"Top-{j+1} passage with score {scores[i][j]:.4f}")
+            logger.info(all_context[indices[i][j]]['context'])
 
 if __name__ == "__main__":
     main()
