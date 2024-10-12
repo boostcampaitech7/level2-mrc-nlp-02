@@ -82,13 +82,13 @@ class DataTrainingArguments:
         default=64, metadata={"help": "Define how many clusters to use for faiss."}
     )
     top_k_retrieval: int = field(
-        default=10,
+        default=2,
         metadata={
             "help": "Define how many top-k passages to retrieve based on similarity."
         },
     )
     use_faiss: bool = field(
-        default=False, metadata={"help": "Whether to build with faiss"}
+        default=True, metadata={"help": "Whether to build with faiss"}
     )
 
     infer_dataset_name: Optional[str] = field(

@@ -276,7 +276,7 @@ def run_mrc(
         )
 
     # Evaluation
-    if training_args.do_eval:
+    if training_args.do_eval and (not training_args.do_predict):
         logger.info("*** Evaluate ***")
         metrics = trainer.evaluate()
 
@@ -284,3 +284,14 @@ def run_mrc(
 
         trainer.log_metrics("eval", metrics)
         trainer.save_metrics("eval", metrics)
+
+    # Prediction
+    if training_args.do_predict:
+        predictions = trainer.predict(
+            test_dataset=eval_dataset, test_examples=datasets["validation"]
+        )
+
+        # predictions.json 은 postprocess_qa_predictions() 호출시 이미 저장됩니다.
+        print(
+            "No metric can be presented because there is no correct answer given. Job done!"
+        )
