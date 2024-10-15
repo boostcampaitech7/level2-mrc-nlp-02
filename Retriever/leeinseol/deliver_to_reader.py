@@ -15,9 +15,6 @@ def get_retriever(use_faiss, model_saved_dir, emb_saved_dir, model_file_name = "
         (RetrieverArguments, DataTrainingArguments_Retriever)
         )
     retriever_args, data_args = parser.parse_args_into_dataclasses()
-    training_args = TrainingArguments(
-        output_dir=model_saved_dir
-        )
     retriever_args.use_faiss = use_faiss
 
     tokenizer = AutoTokenizer.from_pretrained(
