@@ -44,6 +44,7 @@ if __name__ == "__main__":
     parser.add_argument("--data_path", metavar="../../data", type=str, help="")
     parser.add_argument("--context_path", metavar="wikipedia_documents", type=str, help="")
     parser.add_argument("--use_faiss", metavar=False, type=bool, help="")
+    parser.add_argument("--topk", metavar=3, type=int, help="")
 
     args = parser.parse_args()
 
@@ -77,11 +78,11 @@ if __name__ == "__main__":
         retriever.build_faiss(num_clusters=num_clusters)
         # test single query
         with timer("single query by faiss"):
-            scores, indices = retriever.retrieve_faiss(query)
-
+            scores, indices = retriever.retrieve_faiss(query, topk=args.topk)
+            # print("single with no faiss - query scores, indices", scores, indices)
         # test bulk
         with timer("bulk query by exhaustive search"):
-            df = retriever.retrieve_faiss(full_ds)
+            df = retriever.retrieve_faiss(full_ds, topk=args.topk)
             df["correct"] = df["original_context"] == df["context"]
 
             print("correct retrieval result by faiss", df["correct"].sum() / len(df))
@@ -97,4 +98,4 @@ if __name__ == "__main__":
 
         with timer("single query by exhaustive search"):
             scores, indices = retriever.retrieve(query)
-        print("single query scores, indices", scores, indices)
+        # print("single with no faiss - query scores, indices", scores, indices)
