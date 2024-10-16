@@ -34,19 +34,15 @@ def timer(name):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="")
-    parser.add_argument(
-        "--dataset_name", metavar="./data/train_dataset", type=str, help=""
-    )
+    parser.add_argument("--dataset_name", metavar="../../data/train_dataset", type=str, help="")
     parser.add_argument(
         "--model_name_or_path",
         metavar="bert-base-multilingual-cased",
         type=str,
         help="",
     )
-    parser.add_argument("--data_path", metavar="./data", type=str, help="")
-    parser.add_argument(
-        "--context_path", metavar="wikipedia_documents", type=str, help=""
-    )
+    parser.add_argument("--data_path", metavar="../../data", type=str, help="")
+    parser.add_argument("--context_path", metavar="wikipedia_documents", type=str, help="")
     parser.add_argument("--use_faiss", metavar=False, type=bool, help="")
 
     args = parser.parse_args()
@@ -63,18 +59,22 @@ if __name__ == "__main__":
     print(full_ds)
 
     tokenizer = AutoTokenizer.from_pretrained(
-        args.model_name_or_path, use_fast=False,)
+        args.model_name_or_path,
+        use_fast=False,
+    )
 
     retriever = SparseRetrieval(
         tokenize_fn=tokenizer.tokenize,
         data_path=args.data_path,
         context_path=args.context_path,
     )
-    retriever.get
+    retriever.get_sparse_embedding()
+
     query = "대통령을 포함한 미국의 행정부 견제권을 갖는 국가 기관은?"
 
     if args.use_faiss:
-
+        num_clusters = 64
+        retriever.build_faiss(num_clusters=num_clusters)
         # test single query
         with timer("single query by faiss"):
             scores, indices = retriever.retrieve_faiss(query)
@@ -84,8 +84,7 @@ if __name__ == "__main__":
             df = retriever.retrieve_faiss(full_ds)
             df["correct"] = df["original_context"] == df["context"]
 
-            print("correct retrieval result by faiss",
-                  df["correct"].sum() / len(df))
+            print("correct retrieval result by faiss", df["correct"].sum() / len(df))
 
     else:
         with timer("bulk query by exhaustive search"):
@@ -98,3 +97,4 @@ if __name__ == "__main__":
 
         with timer("single query by exhaustive search"):
             scores, indices = retriever.retrieve(query)
+        print("single query scores, indices", scores, indices)
