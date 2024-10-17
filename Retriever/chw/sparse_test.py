@@ -72,8 +72,9 @@ if __name__ == "__main__":
     retriever.get_sparse_embedding()
 
     query = "대통령을 포함한 미국의 행정부 견제권을 갖는 국가 기관은?"
-
+    print(args.topk)
     if args.use_faiss:
+
         num_clusters = 64
         retriever.build_faiss(num_clusters=num_clusters)
         # test single query
@@ -83,19 +84,23 @@ if __name__ == "__main__":
         # test bulk
         with timer("bulk query by exhaustive search"):
             df = retriever.retrieve_faiss(full_ds, topk=args.topk)
-            df["correct"] = df["original_context"] == df["context"]
+            df["correct"] = df.apply(lambda row: row["context"].find(row["original_context"]) != -1, axis=1)
 
+            print("idx < 10 context compare", df[:10]["original_context"], df[:10]["context"])
             print("correct retrieval result by faiss", df["correct"].sum() / len(df))
 
     else:
+
+        with timer("single query by exhaustive search"):
+            scores, indices = retriever.retrieve(query, topk=args.topk)
+        # print("single with no faiss - query scores, indices", scores, indices)
         with timer("bulk query by exhaustive search"):
-            df = retriever.retrieve(full_ds)
-            df["correct"] = df["original_context"] == df["context"]
+            df = retriever.retrieve(full_ds, topk=args.topk)
+            df["correct"] = df.apply(lambda row: row["context"].find(row["original_context"]) != -1, axis=1)
+
+            print("idx < 10 context compare", df[:10]["original_context"], df[:10]["context"])
+
             print(
                 "correct retrieval result by exhaustive search",
                 df["correct"].sum() / len(df),
             )
-
-        with timer("single query by exhaustive search"):
-            scores, indices = retriever.retrieve(query)
-        # print("single with no faiss - query scores, indices", scores, indices)
