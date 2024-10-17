@@ -50,7 +50,7 @@ def main():
     model_args = ModelArguments()
     data_args = DataTrainingArguments()
     training_args = TrainingArguments(
-        output_dir="../logs/model_name_settings/",
+        output_dir="../logs/klue_bert/",
         num_train_epochs=3,
         per_device_train_batch_size=16,
         per_device_eval_batch_size=16,
@@ -64,7 +64,8 @@ def main():
         save_steps=1000,
         gradient_accumulation_steps=1,
         do_train = True,
-        do_eval = True
+        do_eval = True,
+        do_predict = False,
     )
 
     print(model_args.model_name_or_path)
@@ -88,6 +89,7 @@ def main():
 
     training_args.do_train = True # train을 할 것인지 설정
     training_args.do_eval = True # eval을 할 것인지 설정
+    training_args.do_precit = False # inference 시에 활용
     """
     ####################################################### 
 

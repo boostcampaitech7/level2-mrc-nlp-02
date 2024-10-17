@@ -1,119 +1,77 @@
-import os
-import wandb
 import json
-from sklearn.model_selection import KFold
-from torch.utils.data import DataLoader
-from datasets import load_from_disk, load_metric
-from transformers import (
-    AutoTokenizer,
-    HfArgumentParser,
-    TrainingArguments
+
+import numpy as np
+from datasets import load_from_disk
+from transformers import HfArgumentParser
+
+from arguments_retriever import (
+    RetrieverArguments,
+    DataArguments,
+    MetricArguments,
+    TrainingArguments,
+    SparseArguments,
+    DenseArguments,
 )
+from DenseRetriever import DenseRetriever
+from Sparse_retriever import TFIDFRetriever, BM25Retriever
+from metrics_retriever import mrr_k, recall_k
+from utils_retriever import get_docs_id, set_seed, setup_logger
 
-from arguments_retriever import RetrieverArguments, DataTrainingArguments_Retriever
-from utils_retriever import set_seed, setup_logger, timer
-from dataset_retriever import get_dataset_to_tensor, get_all_context_to_tensor
-from DenseRetriever import Retriever
-
-seed = 2024
-set_seed(seed=seed, deterministic=False)
 
 def main() :
     parser = HfArgumentParser(
-        (RetrieverArguments, DataTrainingArguments_Retriever, TrainingArguments)
+        (RetrieverArguments, DataArguments, MetricArguments, TrainingArguments,
+         SparseArguments, DenseArguments)
     )
+    retriever_args, data_args, metric_args, training_args, sparse_args, dense_args = parser.parse_args_into_dataclasses()
 
-    retriever_args, data_args, training_args = parser.parse_args_into_dataclasses()
-    
-    # output_dir -> cli
-    training_args.logging_steps = 10
-    training_args.num_train_epochs = 10
-    training_args.per_device_train_batch_size = 16
-    training_args.per_device_eval_batch_size = 16
-    training_args.learning_rate = 2e-5
-    training_args.warmup_steps = 250
-    training_args.weight_decay = 0.01
+    set_seed(seed=training_args.seed, deterministic=False)
 
     logger = setup_logger(training_args.output_dir)
-    logger.info(f"RetrieverArguments {retriever_args}")
-    logger.info(f"DataTrainingArguments {data_args}")
-    logger.info(f"Training/evaluation parameters {training_args}")
+    logger.info(f"RetrieverArguments: \n{retriever_args}")
+    logger.info(f"DataArguments: \n{data_args}")
+    logger.info(f"MetricArguments: \n{metric_args}")
+    logger.info(f"TrainingArguments: \n{training_args}")
 
-    # WandB 프로젝트 시작
-    wandb.init(project=retriever_args.project_name,
-               config={"k_folds": data_args.n_splits, 
-                       "epochs": training_args.num_train_epochs})
-
-    # dataset, tokenizer 로드 
-    tokenizer = AutoTokenizer.from_pretrained(
-        retriever_args.tokenizer_name
-        if retriever_args.tokenizer_name is not None
-        else retriever_args.model_name_or_path
-    )  
-    dataset = load_from_disk(data_args.train_dataset_path)
-    train_dataset, val_dataset = dataset['train'], dataset['validation']
-
-    # k-fold 설정 
-    best_val_loss = float('inf')
-    best_model_path = os.path.join(training_args.output_dir, "best_model.pth")
-    best_fold = 0
-    num_rows = train_dataset.num_rows
-    indices = list(range(num_rows))
-    kf = KFold(n_splits=data_args.n_splits, shuffle=True, random_state=seed)
+    dataset = load_from_disk(data_args.train_data_path)
+    with open(data_args.all_context_path, "r") as file :
+        corpus = json.load(file)
     
-    for fold, (train_idx, val_idx) in enumerate(kf.split(indices)) :
-        train_subset = train_dataset.select(train_idx)
-        val_subset = train_dataset.select(val_idx)
-
-        train_subset = get_dataset_to_tensor(train_subset, tokenizer, data_args, True)
-        val_subset = get_dataset_to_tensor(val_subset, tokenizer, data_args, True)
-
-        subtrain_loader = DataLoader(train_subset,
-                                  batch_size=training_args.per_device_train_batch_size,
-                                  shuffle=True)
-        subval_loader = DataLoader(val_subset,
-                                batch_size=training_args.per_device_eval_batch_size)
-
-        retriever = Retriever(retriever_args, data_args, tokenizer, logger)
-        
-        # 학습 및 평가
-        with timer(logger, f"Training fold {fold + 1}") :
-            retriever.train(training_args, subtrain_loader, subval_loader, wandb, fold)
-        
-        val_loss = retriever.evaluate(subval_loader)
-        logger.info(f"Fold {fold+1} final validation loss : {val_loss}")
-
-        if val_loss < best_val_loss : 
-            best_val_loss = val_loss
-            best_fold = fold + 1
-            retriever.save_model(best_model_path)
-            logger.info(f"New best model saved at fold {fold+1} with validation loss {val_loss}")
-    logger.info(f"Best model saved at fold {best_fold} with validation loss {best_val_loss}")
+    # 깔끔한 코드는 나중에 정리...
+    retriever_type = retriever_args.retriever_type
+    if retriever_type == "TF-IDF" : 
+        logger.info(f"SparseArguments: \n{sparse_args}")
+        retriever = TFIDFRetriever(sparse_args, logger)
+        retriever.fit(corpus, training_args)
     
-    wandb.finish()
+    elif retriever_type == "BM-25" :
+        logger.info(f"SparseArguments: \n{sparse_args}")
+        retriever = BM25Retriever(sparse_args, logger)
+        retriever.fit(corpus, training_args)
+    
+    elif retriever_type == "Dense" :
+        logger.info(f"DenseArguments: \n{dense_args}")
+        retriever = DenseRetriever(dense_args, logger)
+        retriever.fit(dataset, corpus, training_args)
+    
+    else :
+        raise ValueError(f"Unknown '{retriever_type}' retriever type. Setting another Retriever.")
+    
+    val_queries = dataset['validation']['question']
+    val_context = dataset['validation']['context']
 
-    # Best model 로드 및 평가 
-    logger.info("Loading best model...")
-    retriever.load_model(best_model_path)
-    val_dataset_tensor = get_dataset_to_tensor(val_dataset, tokenizer, data_args, True)
-    val_dataloader = DataLoader(val_dataset_tensor,
-                                batch_size=training_args.per_device_eval_batch_size, shuffle=False)
-    final_val_loss = retriever.evaluate(val_dataloader)
-    logger.info(f"Best model's validation loss(fold {best_fold}) : {final_val_loss}")
+    scores, indices = retriever.retrieve(val_queries, retriever_args.top_k, training_args.per_device_eval_batch_size)
+    # scores : 2-d List, (num_query, top_k)
+    # indices : 2-d List, (num_query, top_k)
 
+    ground_truth_ids = get_docs_id(corpus, val_context)
+    # 1-d List (num_query,)
+    recalls = recall_k(ground_truth_ids, indices, metric_args.recall_k)
+    mrrs = mrr_k(ground_truth_ids, indices, metric_args.mrr_k)
 
-    # 모든 문서에 대한 임베딩 계산 
-    context_path = data_args.all_context_path
-    with open(context_path, "r") as file :
-        contexts = json.load(file)
-    contexts_dataset = get_all_context_to_tensor(contexts, tokenizer, data_args)
-    contexts_loader = DataLoader(contexts_dataset,
-                                 batch_size=training_args.per_device_train_batch_size, 
-                                 shuffle=False)    
-    logger.info("Calculate embedding...")
-    with timer(logger, f"Calculate embedding") :
-        retriever.calculate_embedding(contexts_loader)
-    retriever.save_embedding(training_args.output_dir)
+    logger.info(f"Recall_{metric_args.recall_k} - Mean : {np.mean(recalls):.4f}, Std : {np.std(recalls):.4f}")
+    logger.info(f"MRR_{metric_args.mrr_k} - Mean : {np.mean(mrrs):.4f}, Std : {np.std(mrrs):.4f}")
+
 
 if __name__ == "__main__":
     main()
