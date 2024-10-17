@@ -45,6 +45,7 @@ if __name__ == "__main__":
     parser.add_argument("--context_path", metavar="wikipedia_documents", type=str, help="")
     parser.add_argument("--use_faiss", metavar=False, type=bool, help="")
     parser.add_argument("--topk", metavar=3, type=int, help="")
+    parser.add_argument("--method", metavar="tkidf", type=str, help="임베딩 방법을 인수로 전달합니다. ex) tk-idf, bm25")
 
     args = parser.parse_args()
 
@@ -52,13 +53,14 @@ if __name__ == "__main__":
     org_dataset = load_from_disk(args.dataset_name)
     full_ds = concatenate_datasets(
         [
-            org_dataset["train"].flatten_indices(),
+            # org_dataset["train"].flatten_indices(),
             org_dataset["validation"].flatten_indices(),
         ]
     )  # train dev 를 합친 4192 개 질문에 대해 모두 테스트
     print("*" * 40, "query dataset", "*" * 40)
-    print(full_ds)
-
+    print(full_ds[:2])
+    print("dataset size", len(full_ds))
+    ## full_ds의 컬럼 ['title','context','question','id','answers - ['answer_start', 'text']','document_id']
     tokenizer = AutoTokenizer.from_pretrained(
         args.model_name_or_path,
         use_fast=False,
@@ -69,7 +71,10 @@ if __name__ == "__main__":
         data_path=args.data_path,
         context_path=args.context_path,
     )
-    retriever.get_sparse_embedding()
+    if args.method == "bm25":
+        retriever.get_bm25_embedding()
+    else:
+        retriever.get_sparse_embedding()
 
     query = "대통령을 포함한 미국의 행정부 견제권을 갖는 국가 기관은?"
     print(args.topk)
@@ -92,10 +97,10 @@ if __name__ == "__main__":
     else:
 
         with timer("single query by exhaustive search"):
-            scores, indices = retriever.retrieve(query, topk=args.topk)
+            scores, indices = retriever.retrieve(query, topk=args.topk, method=args.method)
         # print("single with no faiss - query scores, indices", scores, indices)
         with timer("bulk query by exhaustive search"):
-            df = retriever.retrieve(full_ds, topk=args.topk)
+            df = retriever.retrieve(full_ds, topk=args.topk, method=args.method)
             df["correct"] = df.apply(lambda row: row["context"].find(row["original_context"]) != -1, axis=1)
 
             print("idx < 10 context compare", df[:10]["original_context"], df[:10]["context"])

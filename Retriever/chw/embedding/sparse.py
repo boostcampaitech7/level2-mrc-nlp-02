@@ -12,6 +12,7 @@ from datasets import Dataset, concatenate_datasets, load_from_disk
 from sklearn.feature_extraction.text import TfidfVectorizer
 from tqdm.auto import tqdm
 from Retriever.chw.utils.util import timer
+from rank_bm25 import BM25Okapi
 
 
 class SparseRetrieval:
@@ -56,7 +57,8 @@ class SparseRetrieval:
             ngram_range=(1, 2),
             max_features=50000,
         )
-
+        self.tokenize_fn = tokenize_fn
+        self.bm25 = None
         self.p_embedding = None  # get_sparse_embedding()로 생성합니다
         self.indexer = None  # build_faiss()로 생성합니다.
 
@@ -88,6 +90,28 @@ class SparseRetrieval:
                 pickle.dump(self.p_embedding, file)
             with open(tfidfv_path, "wb") as file:
                 pickle.dump(self.tfidfv, file)
+            print("Embedding pickle saved.")
+
+    def get_bm25_embedding(self) -> None:
+        # Pickle을 저장합니다.
+
+        bm25_name = f"bm25.bin"
+        bm25_path = os.path.join(self.data_path, bm25_name)
+
+        if os.path.isfile(bm25_path):
+
+            with open(bm25_path, "rb") as file:
+                self.bm25 = pickle.load(file)
+            print("Embedding bm25 pickle load.")
+        else:
+            print("Build passage embedding bm25")
+            tokenized_corpus = [self.tokenize_fn(doc) for doc in self.contexts]
+            self.bm25 = BM25Okapi(tokenized_corpus)
+
+            print(self.bm25)
+
+            with open(bm25_path, "wb") as file:
+                pickle.dump(self.bm25, file)
             print("Embedding pickle saved.")
 
     def build_faiss(self, num_clusters=64) -> NoReturn:
@@ -124,7 +148,7 @@ class SparseRetrieval:
             faiss.write_index(self.indexer, indexer_path)
             print("Faiss Indexer Saved.")
 
-    def retrieve(self, query_or_dataset: Union[str, Dataset], topk: Optional[int] = 1) -> Union[Tuple[List, List], pd.DataFrame]:
+    def retrieve(self, query_or_dataset: Union[str, Dataset], topk: Optional[int] = 1, method: Optional[str] = "tkidf") -> Union[Tuple[List, List], pd.DataFrame]:
         """
         Arguments:
             query_or_dataset (Union[str, Dataset]):
@@ -144,11 +168,12 @@ class SparseRetrieval:
                 Ground Truth가 있는 Query (train/valid) -> 기존 Ground Truth Passage를 같이 반환합니다.
                 Ground Truth가 없는 Query (test) -> Retrieval한 Passage만 반환합니다.
         """
-
-        assert self.p_embedding is not None, "get_sparse_embedding() 메소드를 먼저 수행해줘야합니다."
+        if method == "tkidf":
+            assert self.p_embedding is not None, "get_sparse_embedding() 메소드를 먼저 수행해줘야합니다."
 
         if isinstance(query_or_dataset, str):
-            doc_scores, doc_indices = self.get_relevant_doc(query_or_dataset, k=topk)
+
+            doc_scores, doc_indices = self.get_relevant_doc(query_or_dataset, k=topk, method=method)
             print("[Search query]\n", query_or_dataset, "\n")
 
             for i in range(topk):
@@ -162,7 +187,7 @@ class SparseRetrieval:
             # Retrieve한 Passage를 pd.DataFrame으로 반환합니다.
             total = []
             with timer("query exhaustive search"):
-                doc_scores, doc_indices = self.get_relevant_doc_bulk(query_or_dataset["question"], k=topk)
+                doc_scores, doc_indices = self.get_relevant_doc_bulk(query_or_dataset["question"], k=topk, method=method)
             for idx, example in enumerate(tqdm(query_or_dataset, desc="Sparse retrieval: ")):
                 tmp = {
                     # Query와 해당 id를 반환합니다.
@@ -180,7 +205,7 @@ class SparseRetrieval:
             cqas = pd.DataFrame(total)
             return cqas
 
-    def get_relevant_doc(self, query: str, k: Optional[int] = 1) -> Tuple[List, List]:
+    def get_relevant_doc(self, query: str, k: Optional[int] = 1, method: Optional[str] = "tkidf") -> Tuple[List, List]:
         """
         Arguments:
             query (str):
@@ -190,22 +215,36 @@ class SparseRetrieval:
         Note:
             vocab 에 없는 이상한 단어로 query 하는 경우 assertion 발생 (예) 뙣뙇?
         """
+        if method == "tkidf":
+            with timer("transform"):
+                query_vec = self.tfidfv.transform([query])
+            assert np.sum(query_vec) != 0, "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
 
-        with timer("transform"):
-            query_vec = self.tfidfv.transform([query])
-        assert np.sum(query_vec) != 0, "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
+            with timer("query ex search"):
+                result = query_vec * self.p_embedding.T
+            if not isinstance(result, np.ndarray):
+                result = result.toarray()
 
-        with timer("query ex search"):
-            result = query_vec * self.p_embedding.T
-        if not isinstance(result, np.ndarray):
-            result = result.toarray()
+            sorted_result = np.argsort(result.squeeze())[::-1]
+            doc_score = result.squeeze()[sorted_result].tolist()[:k]
+            doc_indices = sorted_result.tolist()[:k]
+            return doc_score, doc_indices
+        elif method == "bm25":
+            with timer("tokenized"):
+                tokenized_query = self.tokenize_fn(query)
+            # assert np.sum(query_vec) != 0, "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
 
-        sorted_result = np.argsort(result.squeeze())[::-1]
-        doc_score = result.squeeze()[sorted_result].tolist()[:k]
-        doc_indices = sorted_result.tolist()[:k]
-        return doc_score, doc_indices
+            with timer("query bm25 scores"):
+                bm25_scores = self.bm25.get_scores(tokenized_query)
 
-    def get_relevant_doc_bulk(self, queries: List, k: Optional[int] = 1) -> Tuple[List, List]:
+            # if not isinstance(bm25_scores, np.ndarray):
+            #     result = result.toarray()
+
+            doc_indices = bm25_scores.argsort()[::-1][:k]  # 점수 기준 내림차순 정렬 후 상위 K개 인덱스 추출
+            doc_score = bm25_scores[doc_indices]  # 해당 인덱스의 점수 추출
+            return doc_score, doc_indices
+
+    def get_relevant_doc_bulk(self, queries: List, k: Optional[int] = 1, method: Optional[str] = "tkidf") -> Tuple[List, List]:
         """
         Arguments:
             queries (List):
@@ -215,20 +254,47 @@ class SparseRetrieval:
         Note:
             vocab 에 없는 이상한 단어로 query 하는 경우 assertion 발생 (예) 뙣뙇?
         """
+        if method == "tkidf":
+            query_vec = self.tfidfv.transform(queries)
+            assert np.sum(query_vec) != 0, "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
 
-        query_vec = self.tfidfv.transform(queries)
-        assert np.sum(query_vec) != 0, "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
+            result = query_vec * self.p_embedding.T
+            if not isinstance(result, np.ndarray):
+                result = result.toarray()
+            doc_scores = []
+            doc_indices = []
+            for i in range(result.shape[0]):
+                sorted_result = np.argsort(result[i, :])[::-1]
+                doc_scores.append(result[i, :][sorted_result].tolist()[:k])
+                doc_indices.append(sorted_result.tolist()[:k])
+            return doc_scores, doc_indices
 
-        result = query_vec * self.p_embedding.T
-        if not isinstance(result, np.ndarray):
-            result = result.toarray()
-        doc_scores = []
-        doc_indices = []
-        for i in range(result.shape[0]):
-            sorted_result = np.argsort(result[i, :])[::-1]
-            doc_scores.append(result[i, :][sorted_result].tolist()[:k])
-            doc_indices.append(sorted_result.tolist()[:k])
-        return doc_scores, doc_indices
+        elif method == "bm25":
+            doc_scores = []
+            doc_indices = []
+            for query in queries:
+                with timer("tokenized"):
+                    tokenized_query = self.tokenize_fn(query)
+                # assert np.sum(query_vec) != 0, "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
+
+                with timer("query bm25 scores"):
+                    bm25_scores = self.bm25.get_scores(tokenized_query)
+                    print(tokenized_query, bm25_scores)
+                # if not isinstance(bm25_scores, np.ndarray):
+                #     result = result.toarray()
+                print(bm25_scores)
+
+                doc_indice = bm25_scores.argsort()[::-1][:k]
+                doc_score = bm25_scores[doc_indice]
+
+                print("doc indice", doc_indice)
+                print("doc scores", doc_score)
+
+                doc_indices.append(doc_indice)  # 점수 기준 내림차순 정렬 후 상위 K개 인덱스 추출
+                doc_scores.append(doc_score)  # 해당 인덱스의 점수 추출
+            assert doc_scores.count != queries.count, "오류가 발생했습니다. 쿼리의 개수와 doc_scores의 개수와 일치하지 않습니다."
+
+            return doc_scores, doc_indices
 
     def retrieve_faiss(self, query_or_dataset: Union[str, Dataset], topk: Optional[int] = 1) -> Union[Tuple[List, List], pd.DataFrame]:
         """
