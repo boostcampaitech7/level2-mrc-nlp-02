@@ -148,7 +148,7 @@ class SparseRetrieval:
             faiss.write_index(self.indexer, indexer_path)
             print("Faiss Indexer Saved.")
 
-    def retrieve(self, query_or_dataset: Union[str, Dataset], topk: Optional[int] = 1, method: Optional[str] = "tkidf") -> Union[Tuple[List, List], pd.DataFrame]:
+    def retrieve(self, query_or_dataset: Union[str, Dataset], topk: Optional[int] = 1, method: Optional[str] = "tfidf") -> Union[Tuple[List, List], pd.DataFrame]:
         """
         Arguments:
             query_or_dataset (Union[str, Dataset]):
@@ -168,7 +168,7 @@ class SparseRetrieval:
                 Ground Truth가 있는 Query (train/valid) -> 기존 Ground Truth Passage를 같이 반환합니다.
                 Ground Truth가 없는 Query (test) -> Retrieval한 Passage만 반환합니다.
         """
-        if method == "tkidf":
+        if method == "tfidf":
             assert self.p_embedding is not None, "get_sparse_embedding() 메소드를 먼저 수행해줘야합니다."
 
         if isinstance(query_or_dataset, str):
@@ -205,7 +205,7 @@ class SparseRetrieval:
             cqas = pd.DataFrame(total)
             return cqas
 
-    def get_relevant_doc(self, query: str, k: Optional[int] = 1, method: Optional[str] = "tkidf") -> Tuple[List, List]:
+    def get_relevant_doc(self, query: str, k: Optional[int] = 1, method: Optional[str] = "tfidf") -> Tuple[List, List]:
         """
         Arguments:
             query (str):
@@ -215,7 +215,7 @@ class SparseRetrieval:
         Note:
             vocab 에 없는 이상한 단어로 query 하는 경우 assertion 발생 (예) 뙣뙇?
         """
-        if method == "tkidf":
+        if method == "tfidf":
             with timer("transform"):
                 query_vec = self.tfidfv.transform([query])
             assert np.sum(query_vec) != 0, "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
@@ -244,7 +244,7 @@ class SparseRetrieval:
             doc_score = bm25_scores[doc_indices]  # 해당 인덱스의 점수 추출
             return doc_score, doc_indices
 
-    def get_relevant_doc_bulk(self, queries: List, k: Optional[int] = 1, method: Optional[str] = "tkidf") -> Tuple[List, List]:
+    def get_relevant_doc_bulk(self, queries: List, k: Optional[int] = 1, method: Optional[str] = "tfidf") -> Tuple[List, List]:
         """
         Arguments:
             queries (List):
@@ -254,7 +254,7 @@ class SparseRetrieval:
         Note:
             vocab 에 없는 이상한 단어로 query 하는 경우 assertion 발생 (예) 뙣뙇?
         """
-        if method == "tkidf":
+        if method == "tfidf":
             query_vec = self.tfidfv.transform(queries)
             assert np.sum(query_vec) != 0, "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
 
