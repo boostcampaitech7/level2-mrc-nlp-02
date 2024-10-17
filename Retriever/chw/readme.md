@@ -22,4 +22,11 @@
 
 3. ./Retriever/chw/script/run_sparse.sh를 명령줄에 입력
 4. 수행 후 data 폴더에 bm25, tkidf 임베딩 생성 후 test까지 연속 실행
+
+
+
+# notice
   
+1. 현재 faiss는 TK-IDF 메서드만 지원
+2. 로그를 pretty하게 작성 x
+3. 명령줄 argument에 대한 자세한 설명이 작성되지 않았습니다. 추후 작성 예정
