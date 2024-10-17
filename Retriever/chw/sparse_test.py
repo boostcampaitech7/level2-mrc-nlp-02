@@ -45,12 +45,14 @@ if __name__ == "__main__":
     parser.add_argument("--context_path", metavar="wikipedia_documents", type=str, help="")
     parser.add_argument("--use_faiss", metavar=False, type=bool, help="")
     parser.add_argument("--topk", metavar=3, type=int, help="")
-    parser.add_argument("--method", metavar="tkidf", type=str, help="임베딩 방법을 인수로 전달합니다. ex) tk-idf, bm25")
+    parser.add_argument("--method", metavar="tfidf", type=str, help="임베딩 방법을 인수로 전달합니다. ex) tfidf, bm25")
 
     args = parser.parse_args()
 
     # Test sparse
     org_dataset = load_from_disk(args.dataset_name)
+
+    ## 현재 validation 데이터셋에 대한 테스트, train 데이터셋도 포함시키고 싶을 경우 밑의 org_dataset["train"].flatten_indices() 주석 해제
     full_ds = concatenate_datasets(
         [
             # org_dataset["train"].flatten_indices(),

@@ -14,14 +14,14 @@
   
   ★ 기본적으로 프로젝트 루트디렉터리 기준으로 데이터를 인식하고 임베딩 파일을 생성하기 때문에 루트 디렉터리에서 파일을 실행하는 것이 중요
 
-  임베딩 메서드는 --method 인수 설정 - [bm25, tkidf]를 지원<br>
+  임베딩 메서드는 --method 인수 설정 - [bm25, tfidf]를 지원<br>
   모델 및 토크아니저는 --model_name_or_path 인수 설정<br>
   topk는 --topk 인수 설정 <br>
 
   현재 테스트 타깃을 train 데이터와 valid 데이터 중 따로 선택하는 기능은 없기때문에 파일에서 직접 설정하셔야 합니다. 
 
 3. ./Retriever/chw/script/run_sparse.sh를 명령줄에 입력
-4. 수행 후 data 폴더에 bm25, tkidf 임베딩 생성 후 test까지 연속 실행
+4. 수행 후 data 폴더에 bm25, tfidf 임베딩 생성 후 test까지 연속 실행
 
 
 
