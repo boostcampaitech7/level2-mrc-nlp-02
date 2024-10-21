@@ -80,13 +80,13 @@ class DataArguments :
 @dataclass
 class MetricArguments :
     recall_k : List[int] = field(
-        default_factory= lambda: [1,3,5,10,25], # ,10,25
+        default_factory= lambda: [1,3,5,10,13, 25], # ,10,25
         metadata={
             "help" : ""
         }
     )
     mrr_k : List[int] = field(
-        default_factory= lambda: [1,3,5,10,25], #,10,25
+        default_factory= lambda: [1,3,5,10,13,25], #,10,25
         metadata={
             "help" : ""
         }
@@ -221,7 +221,7 @@ class TrainingArguments :
 @dataclass
 class SparseArguments :
     sparse_tokenizer_name : str = field(
-        default= "simple", # "huggingface tokenizer"
+        default= "klue/bert-base", # "simple", "huggingface tokenizer"
         metadata={
             "help" : ""
         }

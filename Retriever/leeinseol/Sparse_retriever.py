@@ -6,6 +6,7 @@ from rank_bm25 import BM25Okapi
 from scipy.sparse import load_npz, save_npz
 from sklearn.feature_extraction.text import TfidfVectorizer
 from transformers import AutoTokenizer
+import torch
 
 from utils_retriever import timer
 
@@ -18,68 +19,16 @@ class HuggingFaceTokenizerWrapper:
         self.tokenizer = tokenizer
 
     def __call__(self, text):
-        return self.tokenizer.tokenize(text, add_special_tokens=False)
+        return self.tokenizer.encode(text, add_special_tokens=False)
 
 def get_tokenizer_func(sparse_args):
     if sparse_args.sparse_tokenizer_name == "simple":
         return simple_tokenizer
     else:
-        tokenizer = AutoTokenizer.from_pretrained(sparse_args.sparse_tokenizer_name)
+        tokenizer = AutoTokenizer.from_pretrained(sparse_args.sparse_tokenizer_name, trust_remote_code = True)
         # 클래스 인스턴스를 반환
         return HuggingFaceTokenizerWrapper(tokenizer)
 
-
-
-
-
-
-# # huggingface_tokenizer에서 반환하는 함수가 전역에서 정의된 함수여야 합니다.
-
-# def huggingface_tokenizer(tokenizer):
-#     def tokenize(text):
-#         return tokenizer.tokenize(text, add_special_tokens=False)
-#     return tokenize
-
-# def tokenize_with_huggingface(text, tokenizer):
-#     return tokenizer.tokenize(text, add_special_tokens=False)
-
-# def get_tokenizer_func(sparse_args):
-#     if sparse_args.sparse_tokenizer_name == "simple":
-#         return simple_tokenizer
-#     else:
-#         tokenizer = AutoTokenizer.from_pretrained(sparse_args.sparse_tokenizer_name)
-#         return lambda text: tokenize_with_huggingface(text, tokenizer)
-
-
-
-# # 로컬 함수였던 tokenize를 전역 함수로 정의
-# def huggingface_tokenize(text, tokenizer):
-#     return tokenizer.tokenize(text, add_special_tokens=False)
-
-# def get_tokenizer_func(sparse_args):
-#     if sparse_args.sparse_tokenizer_name == "simple":
-#         return simple_tokenizer
-#     else:
-#         tokenizer = AutoTokenizer.from_pretrained(sparse_args.sparse_tokenizer_name)
-#         # 전역 함수 huggingface_tokenize를 람다로 넘겨줌
-#         return lambda text: huggingface_tokenize(text, tokenizer)
-
-
-
-
-
-
-# def huggingface_tokenizer(tokenizer) :
-#     def tokenize(text) : 
-#         return tokenizer.tokenize(text, add_special_tokens = False)
-#     return tokenize
-
-# def get_tokenizer_func(sparse_args) :
-#     if sparse_args.sparse_tokenizer_name == "simple" :
-#         return simple_tokenizer
-#     else :
-#         tokenizer = AutoTokenizer.from_pretrained(sparse_args.sparse_tokenizer_name)
-#         return huggingface_tokenizer(tokenizer)
 
 class TFIDFRetriever :
     def __init__(self, sparse_args, logger) :
@@ -173,30 +122,52 @@ class BM25Retriever :
         else :
             self.load_model(model_path)
 
-    def retrieve(self, queries, top_k, batch_size) :
+    def retrieve(self, queries, top_k, batch_size, hybrid = False) :
         assert self.bm25 is not None, "BM25 model hasn't been fitted yet."
         assert batch_size <= len(queries), "Batch size must smaller then length of queries."
 
         scores = []
-        indices = []
+        # indices = []
         for i in range(0, len(queries), batch_size) :
             batch_queries = queries[i:i+batch_size]
             tokenized_queries = [self.tokenizer_func(query) for query in batch_queries]
 
             for query in tokenized_queries :
                 query_scores = self.bm25.get_scores(query)
+                scores.append(torch.tensor(query_scores).unsqueeze(0))
 
-                sorted_indices = np.argsort(query_scores)[-top_k:][::-1]
-                doc_scores = [query_scores[idx] for idx in sorted_indices]
-                scores.append(doc_scores)
-                indices.append(sorted_indices.tolist())
+                # sorted_indices = np.argsort(query_scores)[-top_k:][::-1]
+                # doc_scores = [query_scores[idx] for idx in sorted_indices]
+                # scores.append(doc_scores)
+                # indices.append(sorted_indices.tolist())
         
+        scores = torch.cat(scores, dim = 0)
+
+        if hybrid :
+            return scores.tolist(), self.document_mappings
+
+        scores, indices = scores.topk(top_k, dim = 1)
         doc_ids = []
         for i in range(len(indices)) : 
-            doc_ids.append([self.document_mappings[idx] for idx in indices[i]])
+            doc_ids.append([self.document_mappings[idx.item()] for idx in indices[i].reshape(-1)])
 
-        return scores, doc_ids
+        return scores.tolist(), doc_ids
     
+    def get_all_scores(self, queries, batch_size) :
+        assert self.bm25 is not None, "BM25 model hasn't been fitted yet."
+        assert batch_size <= len(queries), "Batch size must smaller then length of queries."
+
+        scores = []
+        for i in range(0, len(queries), batch_size) :
+            batch_queries = queries[i:i+batch_size]
+            tokenized_queries = [self.tokenizer_func(query) for query in batch_queries]
+
+            for query in tokenized_queries :
+                query_scores = self.bm25.get_scores(query)
+                scores.append(query_scores)
+        
+        return scores, self.document_mappings
+
     def save_model(self, save_path) :
         with open(save_path, "wb") as file :
             pickle.dump({

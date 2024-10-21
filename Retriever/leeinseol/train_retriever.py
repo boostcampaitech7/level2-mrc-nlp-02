@@ -71,16 +71,13 @@ def main() :
     val_context = dataset['validation']['context']
 
     with timer(logger, f"Caculating Validation {len(val_queries)}") :
-        if retriever_type == "TF-IDF" or retriever_type == "BM-25" : 
-            scores, indices = retriever.retrieve(val_queries, retriever_args.top_k,
-                                                training_args.per_device_eval_batch_size)
-        elif dense_args.task_description :
+        if retriever_type == "Pre-trained" :
             scores, indices = retriever.retrieve(val_queries, retriever_args.top_k, 
-                                                training_args.per_device_eval_batch_size,
-                                                dense_args.task_description)
-        else : 
+                                                 training_args.per_device_eval_batch_size,
+                                                 dense_args.task_description)
+        else :
             scores, indices = retriever.retrieve(val_queries, retriever_args.top_k,
-                                                training_args.per_device_eval_batch_size)
+                                                 training_args.per_device_eval_batch_size)            
     # scores : 2-d List, (num_query, top_k)
     # indices : 2-d List, (num_query, top_k)
 

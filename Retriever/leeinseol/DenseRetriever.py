@@ -687,13 +687,14 @@ class PretrainedRetriever :
             # 쿼리와 문서가 합쳐져서 들어갈 경우 사용 
             raise NotImplementedError("Using query+passage model is not implement yet.")
 
-    def retrieve(self, queries, top_k, batch_size, task_description) : 
+    def retrieve(self, queries, top_k, batch_size, task_description, hybrid = False) : 
         """
         Arguments
         - queries : List[str]
         """
         assert self.embeddings is not None, "Embeddings are None. You must calculate embeddings."
         assert self.document_mappings is not None, "Document mappings are None. You must calculate embeddings."
+        assert batch_size <= len(queries), "Batch size must smaller then length of query set." 
         
         if self.dense_args.use_faiss :
             raise NotImplementedError("Using Faiss is not implement yet.")
@@ -716,7 +717,9 @@ class PretrainedRetriever :
                     sub_scores = (sub_query_embeddings @ self.embeddings.T)
                     all_scores.append(sub_scores)
             all_scores = torch.cat(all_scores, dim= 0)
-            
+            if hybrid :
+                return all_scores.tolist(), self.document_mappings
+
             scores, indices = all_scores.topk(top_k, dim = 1)
         
         ids = []
