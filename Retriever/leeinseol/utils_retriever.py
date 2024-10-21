@@ -52,8 +52,8 @@ def timer(logger, name) :
     yield
     logger.info(f'[{name}] done in {time.time() - start:.2f} seconds')
 
-def get_docs_id(all_context, ground_context) :
-    context_to_id = {doc['context'] : doc['id'] for doc in all_context}
+def get_docs_id(corpus, ground_context) :
+    context_to_id = {context: id for id, context in corpus.items()}
 
     doc_ids = []
     for context in ground_context :

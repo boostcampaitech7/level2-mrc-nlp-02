@@ -1,32 +1,51 @@
-import os
-import warnings
-from transformers import (
-    AutoTokenizer,
-    HfArgumentParser,
-    TrainingArguments
+import json
+
+import numpy as np
+from datasets import load_from_disk
+from transformers import HfArgumentParser
+
+from arguments_retriever import (
+    RetrieverArguments,
+    DataArguments,
+    MetricArguments,
+    TrainingArguments,
+    SparseArguments,
+    DenseArguments,
+    QueryEncoderArguments,
+    PassageEncoderArguments
 )
-from arguments_retriever import RetrieverArguments, DataTrainingArguments_Retriever
-from DenseRetriever import Retriever
+from DenseRetriever import DenseRetriever, PretrainedRetriever
+from Sparse_retriever import TFIDFRetriever, BM25Retriever
+from metrics_retriever import mrr_k, recall_k
+from utils_retriever import get_docs_id, set_seed, setup_logger, timer
 
-warnings.filterwarnings("ignore")
+def get_retriever(retriever_type, corpus, load_dir) :
+    training_args = TrainingArguments
+    sparse_args = SparseArguments
+    dense_args = DenseArguments    
+    training_args.output_dir = load_dir
+    logger = setup_logger(training_args.output_dir, "dummy.txt")
+    training_args.do_train = False
 
-def get_retriever(use_faiss, model_saved_dir, emb_saved_dir, model_file_name = "best_model.pth", emb_file_name = "embeddings.pt") :
-    parser = HfArgumentParser(
-        (RetrieverArguments, DataTrainingArguments_Retriever)
-        )
-    retriever_args, data_args = parser.parse_args_into_dataclasses()
-    retriever_args.use_faiss = use_faiss
-
-    tokenizer = AutoTokenizer.from_pretrained(
-        retriever_args.tokenizer_name
-        if retriever_args.tokenizer_name is not None
-        else retriever_args.model_name_or_path
-        ) 
-
-    retriever = Retriever(retriever_args, data_args, tokenizer, logger = None)
-    model_path = os.path.join(model_saved_dir, model_file_name)
-    retriever.load_model(model_path)
-    retriever.load_embedding(emb_saved_dir, emb_file_name)
-    retriever.build_faiss()
+    if retriever_type =="TF-IDF" :
+        logger.info(f"TF-IDF arguments: \n{sparse_args}")
+        retriever = TFIDFRetriever(sparse_args, logger)
+        retriever.fit(corpus, training_args)
+    elif retriever_type == "BM-25" :
+        logger.info(f"BM-25 arguments: \n{sparse_args}")
+        retriever = BM25Retriever(sparse_args, logger)
+        retriever.fit(corpus, training_args)
+    # elif retriever_type == "Dense" :
+    #     logger.info(f"Dense arguments: \n{dense_args}")
+    #     logger.info(f"Query arguments: \n{query_args}")
+    #     logger.info(f"Passage arguments: \n{passage_args}")
+    #     retriever = DenseRetriever(dense_args, query_args, passage_args, logger)
+    #     retriever.fit(dataset, corpus, training_args)
+    elif retriever_type == "Pre-trained" :
+        logger.info(f"Pre-trained arguments: \n{dense_args}")
+        retriever = PretrainedRetriever(dense_args, logger)
+        retriever.fit(corpus, training_args)
+    else :
+        raise ValueError(f"Unknown '{retriever_type}' retriever type. Setting another retriever_type in <TF-IDF, BM-25, Pre-trained>")
 
     return retriever
