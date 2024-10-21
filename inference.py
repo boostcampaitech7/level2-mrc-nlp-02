@@ -71,7 +71,7 @@ def main():
     print(datasets)
 
     ########### Load Saved Reader ########################
-    model_path = "./Reader/logs/model_name_settings"
+    model_path = "./logs/model_name_settings"
     config = AutoConfig.from_pretrained(
         model_path
     )
