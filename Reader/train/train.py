@@ -50,7 +50,7 @@ def main():
     model_args = ModelArguments()
     data_args = DataTrainingArguments()
     training_args = TrainingArguments(
-        output_dir="../logs/klue_bert/",
+        output_dir="./logs/klue_bert/",
         num_train_epochs=3,
         per_device_train_batch_size=16,
         per_device_eval_batch_size=16,
