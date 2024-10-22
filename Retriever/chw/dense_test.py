@@ -96,12 +96,12 @@ if __name__ == "__main__":
     query = "몽골 제국의 지도자는 누구야?"
 
     with timer("single query by exhaustive search"):
-        results = retriever.retrieve(query_or_dataset=query, topk=5)
+        results = retriever.retrieve(query_or_dataset=query, topk=args.topk)
         # print("single query result ----", results.tolist())
 
     # print("single with no faiss - query scores, indices", scores, indices)
     with timer("bulk query by exhaustive search"):
-        results = retriever.retrieve(query_or_dataset=Dataset.from_dict(full_ds[:5]), topk=5)
+        results = retriever.retrieve(query_or_dataset=Dataset.from_dict(full_ds[:5]), topk=args.topk)
         results["correct"] = results.apply(lambda row: row["context"].find(row["original_context"]) != -1, axis=1)
 
         print("idx < 10 context compare", results[:10]["original_context"], results[:10]["context"])
