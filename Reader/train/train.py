@@ -50,9 +50,9 @@ def main():
     model_args = ModelArguments()
     data_args = DataTrainingArguments()
     training_args = TrainingArguments(
-        output_dir="../logs/klue_bert/",
+        output_dir="./logs/klue_roberta-base_mL512_k15",
         num_train_epochs=3,
-        per_device_train_batch_size=16,
+        per_device_train_batch_size=8,
         per_device_eval_batch_size=16,
         learning_rate=2e-5,
         warmup_ratio=0.1,
