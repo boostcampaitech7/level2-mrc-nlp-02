@@ -89,6 +89,8 @@ if __name__ == "__main__":
     retriever = DenseRetrieval(
         args=training_args, dataset=org_dataset["train"], data_path=args.data_path, context_path=args.context_path, num_neg=2, tokenizer=tokenizer, p_encoder=p_encoder, q_encoder=q_encoder
     )
+
+    #### 실행하고자 하는 모드에 따라서 train 혹은 load_model 하나를 선택하여 주석으로 칠한 후 실행 (train : 학습 후 인코더 활용, load_model : 기학습된 모델을 불러온 후 인코더 활용)
     retriever.train()
     # retriever.load_model()
     query = "몽골 제국의 지도자는 누구야?"
