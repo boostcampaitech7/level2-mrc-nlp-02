@@ -79,7 +79,7 @@ def main():
     print(datasets)
 
     ########### Load Saved Reader ########################
-    model_path = "./logs/klue_roberta-base_mL512_k15"
+    model_path = "./logs/model_name_settings"
     config = AutoConfig.from_pretrained(
         model_path
     )
@@ -173,6 +173,18 @@ def run_hybrid_retrieval(first_retriever_type: str,
                         first_weight: float,
                         scaling: str,
                         batch_size = 4)->DatasetDict:
+     """
+        Arguments:
+            - first_retriever_type, second_retriever_type : 각각 어떤 리트리버를 사용할 지 선택
+            - “BM-25”, “Pre-trained”만 구현되어 있는 상태
+            - corpus : 전휘님이 새로 만드신 wiki 데이터 불러온 객체 전달
+            - load_dir : 인설이 올려준 load_folder.zip 압축 해제 후, 해당 폴더의 경로 지정
+            - queries : 사용 예시처럼 데이터셋에서 바로 쿼리 추출해서 넣어주면 됨.
+            - top_k : 상위 문서 몇개 뽑을 것인지 설정
+            - first_weight : 첫 번째 리트리버의 비율 설정(두번째 리트리버의 비율은 내부에서 1 - first_weight으로 정해짐)
+            - scaling : 두 리트리버를 어떤 스케일링으로 범위를 맞출 것인가. “Min-Max”, “L2” 중에 선택 가능
+            - batch_size : 여러 개의 쿼리가 들어올 때, 배치 크기를 몇으로 할 것인가. 4로 고정했지만, 쿼리의 수가 4보다 작게되면 오류 발생해서 따로 지정해야함.
+     """
     
     # JSON 파일 불러오기
     
