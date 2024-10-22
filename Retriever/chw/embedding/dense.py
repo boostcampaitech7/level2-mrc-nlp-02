@@ -318,19 +318,19 @@ class DenseRetrieval:
         with torch.no_grad():
             p_encoder.eval()
             q_encoder.eval()
-            for query in tqdm(queries, desc="query passage embedding and get relevant doc"):
+            p_embs = []
+            for batch in tqdm(self.passage_dataloader, desc="passage embedding"):
+
+                batch = tuple(t.to(args.device) for t in batch)
+                p_inputs = {"input_ids": batch[0], "attention_mask": batch[1], "token_type_ids": batch[2]}
+                p_emb = p_encoder(**p_inputs).to("cpu")
+                p_embs.append(p_emb)
+
+            p_embs = torch.stack(p_embs, dim=0).view(len(self.passage_dataloader.dataset), -1)  # (num_passage, emb_dim)
+
+            for query in tqdm(queries, desc="query embedding and get relevant topk doc"):
                 q_seqs_val = self.tokenizer([query], padding="max_length", truncation=True, return_tensors="pt").to(args.device)
                 q_emb = q_encoder(**q_seqs_val).to("cpu")  # (num_query=1, emb_dim)
-
-                p_embs = []
-                for batch in self.passage_dataloader:
-
-                    batch = tuple(t.to(args.device) for t in batch)
-                    p_inputs = {"input_ids": batch[0], "attention_mask": batch[1], "token_type_ids": batch[2]}
-                    p_emb = p_encoder(**p_inputs).to("cpu")
-                    p_embs.append(p_emb)
-
-                p_embs = torch.stack(p_embs, dim=0).view(len(self.passage_dataloader.dataset), -1)  # (num_passage, emb_dim)
 
                 dot_prod_scores = torch.matmul(q_emb, torch.transpose(p_embs, 0, 1))
                 rank = torch.argsort(dot_prod_scores, dim=1, descending=True).squeeze()
