@@ -78,7 +78,7 @@ if __name__ == "__main__":
     train_dataset = org_dataset
 
     training_args = TrainingArguments(
-        output_dir="dense_retrieval", evaluation_strategy="epoch", learning_rate=3e-4, per_device_train_batch_size=2, per_device_eval_batch_size=2, num_train_epochs=3, weight_decay=0.01
+        output_dir="dense_retrieval", evaluation_strategy="epoch", learning_rate=3e-4, per_device_train_batch_size=1, per_device_eval_batch_size=2, num_train_epochs=10, weight_decay=0.01
     )
     model_checkpoint = args.model_name_or_path
 
