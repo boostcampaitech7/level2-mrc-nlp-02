@@ -268,6 +268,38 @@ class DenseRetrieval:
             cqas = pd.DataFrame(total)
             return cqas
 
+    def get_passage_embedding(self, args=None, p_encoder=None, mode="train"):
+        pickle_name = self.context_path + "_dense_emb.bin"
+        emb_path = os.path.join(self.data_path, pickle_name)
+
+        if args is None:
+            args = self.args
+
+        if os.path.isfile(emb_path) and mode != "train":
+            with open(emb_path, "rb") as f:
+                p_embs = pickle.load(f)
+                self.p_embs = p_embs
+        else:
+            if p_encoder is None:
+                p_encoder = self.p_encoder
+
+            with torch.no_grad():
+                p_encoder.eval()
+
+                p_embs = []
+                for batch in tqdm(self.passage_dataloader, desc="passage embedding"):
+
+                    batch = tuple(t.to(args.device) for t in batch)
+                    p_inputs = {"input_ids": batch[0], "attention_mask": batch[1], "token_type_ids": batch[2]}
+                    p_emb = p_encoder(**p_inputs).to("cpu")
+                    p_embs.append(p_emb)
+            # print([p.shape for p in p_embs])
+            p_embs = torch.stack(p_embs, dim=0).view(len(self.passage_dataloader.dataset), -1)  # (num_passage, emb_dim)
+            self.p_embs = p_embs
+
+            with open(emb_path, "wb") as f:
+                pickle.dump(p_embs, f)
+
     def get_relevant_doc(self, query, k=1, args=None, p_encoder=None, q_encoder=None):
 
         if args is None:
@@ -287,17 +319,8 @@ class DenseRetrieval:
             q_seqs_val = self.tokenizer([str(query)], padding="max_length", truncation=True, return_tensors="pt").to(args.device)
             q_emb = q_encoder(**q_seqs_val).to("cpu")  # (num_query=1, emb_dim)
 
-            p_embs = []
-            for batch in self.passage_dataloader:
-
-                batch = tuple(t.to(args.device) for t in batch)
-                p_inputs = {"input_ids": batch[0], "attention_mask": batch[1], "token_type_ids": batch[2]}
-                p_emb = p_encoder(**p_inputs).to("cpu")
-                p_embs.append(p_emb)
-
-        p_embs = torch.stack(p_embs, dim=0).view(len(self.passage_dataloader.dataset), -1)  # (num_passage, emb_dim)
-
-        dot_prod_scores = torch.matmul(q_emb, torch.transpose(p_embs, 0, 1))
+        ## get_passage_embedding()로 미리 생성한 passage embedding(p_embs)를 활용해서 내적곱을 합니다.
+        dot_prod_scores = torch.matmul(q_emb, torch.transpose(self.p_embs, 0, 1))
         rank = torch.argsort(dot_prod_scores, dim=1, descending=True).squeeze()
         return rank[:k]
 
@@ -308,31 +331,18 @@ class DenseRetrieval:
         if args is None:
             args = self.args
 
-        if p_encoder is None:
-            p_encoder = self.p_encoder
-
         if q_encoder is None:
             q_encoder = self.q_encoder
 
         results = []
         with torch.no_grad():
-            p_encoder.eval()
             q_encoder.eval()
-            p_embs = []
-            for batch in tqdm(self.passage_dataloader, desc="passage embedding"):
-
-                batch = tuple(t.to(args.device) for t in batch)
-                p_inputs = {"input_ids": batch[0], "attention_mask": batch[1], "token_type_ids": batch[2]}
-                p_emb = p_encoder(**p_inputs).to("cpu")
-                p_embs.append(p_emb)
-
-            p_embs = torch.stack(p_embs, dim=0).view(len(self.passage_dataloader.dataset), -1)  # (num_passage, emb_dim)
 
             for query in tqdm(queries, desc="query embedding and get relevant topk doc"):
                 q_seqs_val = self.tokenizer([query], padding="max_length", truncation=True, return_tensors="pt").to(args.device)
                 q_emb = q_encoder(**q_seqs_val).to("cpu")  # (num_query=1, emb_dim)
-
-                dot_prod_scores = torch.matmul(q_emb, torch.transpose(p_embs, 0, 1))
+                ## get_passage_embedding()로 미리 생성한 passage embedding(p_embs)를 활용해서 내적곱을 합니다.
+                dot_prod_scores = torch.matmul(q_emb, torch.transpose(self.p_embs, 0, 1))
                 rank = torch.argsort(dot_prod_scores, dim=1, descending=True).squeeze()
                 results.append(rank[:k])
 
