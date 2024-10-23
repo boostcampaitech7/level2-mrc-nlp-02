@@ -29,6 +29,7 @@ class DenseRetrieval:
 
         self.args = args
         self.data_path = data_path
+        self.context_path = context_path
         with open(os.path.join(data_path, context_path), "r", encoding="utf-8") as f:
             wiki = json.load(f)
 
@@ -56,7 +57,7 @@ class DenseRetrieval:
         # print(self.dataset.keys())
         # 1. In-Batch-Negative 만들기
         # CORPUS를 np.array로 변환해줍니다.
-        corpus = np.array(list(set([example for example in dataset["context"]])))
+        corpus = np.array(list(set([example for example in self.contexts])))
 
         p_with_neg = []
 
@@ -84,8 +85,9 @@ class DenseRetrieval:
         train_dataset = TensorDataset(p_seqs["input_ids"], p_seqs["attention_mask"], p_seqs["token_type_ids"], q_seqs["input_ids"], q_seqs["attention_mask"], q_seqs["token_type_ids"])
 
         self.train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=self.args.per_device_train_batch_size)
-
-        valid_seqs = tokenizer(dataset["context"], padding="max_length", truncation=True, return_tensors="pt")
+        print(len(self.contexts), type(self.contexts))
+        print(len(dataset["context"]), type(dataset["context"]))
+        valid_seqs = tokenizer(self.contexts, padding="max_length", truncation=True, return_tensors="pt")
         passage_dataset = TensorDataset(valid_seqs["input_ids"], valid_seqs["attention_mask"], valid_seqs["token_type_ids"])
         self.passage_dataloader = DataLoader(passage_dataset, batch_size=self.args.per_device_train_batch_size)
 
@@ -238,9 +240,9 @@ class DenseRetrieval:
             print(results)
             for i, idx in enumerate(indices):
                 print(f"Top-{i+1} passage with index {idx}")
-                print(self.dataset["context"][idx])
+                print(self.contexts[idx])
 
-            return [self.dataset["context"][idx] for idx in indices]
+            return [self.contexts[idx] for idx in indices]
 
         elif isinstance(query_or_dataset, Dataset):
 
