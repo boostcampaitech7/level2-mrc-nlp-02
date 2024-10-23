@@ -4,6 +4,7 @@ from tqdm.auto import tqdm
 from pprint import pprint
 import json
 import os
+import pickle
 from sklearn.feature_extraction.text import TfidfVectorizer
 from typing import List, NoReturn, Optional, Tuple, Union
 import torch
