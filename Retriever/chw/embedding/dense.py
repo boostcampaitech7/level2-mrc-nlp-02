@@ -254,7 +254,7 @@ class DenseRetrieval:
                 print("indices length", len(indices))
             for idx, example in enumerate(tqdm(query_or_dataset, desc="Dense retrieval: ")):
                 print("idx - ", idx)
-                print("example - ", example)
+
                 tmp = {
                     # Query와 해당 id를 반환합니다.
                     "question": example["question"],
@@ -266,6 +266,9 @@ class DenseRetrieval:
                     # validation 데이터를 사용하면 ground_truth context와 answer도 반환합니다.
                     tmp["original_context"] = example["context"]
                     tmp["answers"] = example["answers"]
+
+                # print("origin context - ", tmp["original_context"])
+                # print("topk context", tmp["context"])
                 total.append(tmp)
 
             cqas = pd.DataFrame(total)
