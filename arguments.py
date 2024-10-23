@@ -9,7 +9,7 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        default="klue/bert-base",
+        default="klue/roberta-base",
         metadata={
             "help": "Path to pretrained model or model identifier from huggingface.co/models"
         },
@@ -21,7 +21,7 @@ class ModelArguments:
         },
     )
     tokenizer_name: Optional[str] = field(
-        default=None,
+        default="klue/roberta-base",
         metadata={
             "help": "Pretrained tokenizer name or path if not the same as model_name"
         },
@@ -35,7 +35,7 @@ class DataTrainingArguments:
     """
 
     dataset_name: Optional[str] = field(
-        default="../../data/train_dataset",
+        default="data/deduplicated_dataset/train_dataset",
         metadata={"help": "The name of the dataset to use."},
     )
     overwrite_cache: bool = field(
@@ -47,7 +47,7 @@ class DataTrainingArguments:
         metadata={"help": "The number of processes to use for the preprocessing."},
     )
     max_seq_length: int = field(
-        default=384,
+        default=512,
         metadata={
             "help": "The maximum total input sequence length after tokenization. Sequences longer "
             "than this will be truncated, sequences shorter will be padded."
@@ -82,7 +82,7 @@ class DataTrainingArguments:
         default=64, metadata={"help": "Define how many clusters to use for faiss."}
     )
     top_k_retrieval: int = field(
-        default=2,
+        default=15,
         metadata={
             "help": "Define how many top-k passages to retrieve based on similarity."
         },
@@ -92,6 +92,6 @@ class DataTrainingArguments:
     )
 
     infer_dataset_name: Optional[str] = field(
-        default="./data/test_dataset",
+        default="./data/deduplicated_dataset/test_dataset",
         metadata={"help": "The name of the dataset to use."},
     )

@@ -1,39 +1,76 @@
 from dataclasses import dataclass, field
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, List
 
 
 @dataclass
 class RetrieverArguments :
     retriever_type : str = field(
-        default= "Dense",  # "TF-IDF", "BM-25"
+        default= "Dense",  # "TF-IDF", "BM-25", # "Pre-trained"
         metadata= {
             "help": ""
         }
     )
     top_k : int = field(
-        default= 5, 
+        default= 100, 
         metadata= {
             "help" : ""
         }
     )
+    first_retriever_type : str = field(
+        default="BM-25", 
+        metadata={
+            "help" : ""
+        }
+    )
+    second_retriever_type : str = field(
+        default="Pre-trained",
+        metadata= {
+            "help" : ""
+        }
+    )
+    first_k : int = field(
+        default=25,
+        metadata={
+            "help" : ""
+        }
+    )
+    second_k : int = field(
+        default= 5,
+        metadata= {
+            "help" : ""
+        }
+    )
+    first_task_description : str = field(
+        default= "",
+        metadata= {
+            "help" : ""
+        }
+    )
+    second_task_description : str = field(
+        default= 'Given a web search query, retrieve relevant passages that answer the query',
+        metadata={
+            "help" : ""
+        }
+    )
+
 
 
 @dataclass
 class DataArguments :
     train_data_path : str = field(
-        default= "../../data/train_dataset",
+        default= "../../data/no_duplicate/dataset/train_dataset", # Naver_KorQuADv1
         metadata= {
             "help" : ""
         }
     )
     test_data_path : str = field(
-        default= "../../data/test_dataset",
+        default= "../../data/no_duplicate/dataset/test_dataset",
         metadata= {
             "help" : ""
         }
     )
     all_context_path : str = field(
-        default= "../../data/all_context.json",
+        default= "../../data/no_duplicate/dataset/wikipedia_documents.json",
         metadata= {
             "help" : ""
         }
@@ -42,14 +79,14 @@ class DataArguments :
 
 @dataclass
 class MetricArguments :
-    recall_k : int = field(
-        default= 1,
+    recall_k : List[int] = field(
+        default_factory= lambda: [1,3,5,10,13, 25], # ,10,25
         metadata={
             "help" : ""
         }
     )
-    mrr_k : int = field(
-        default= 3,
+    mrr_k : List[int] = field(
+        default_factory= lambda: [1,3,5,10,13,25], #,10,25
         metadata={
             "help" : ""
         }
@@ -100,7 +137,73 @@ class TrainingArguments :
             "help" : ""
         }
     )
-    # for only TF-IDF
+    do_train : bool = field(
+        default= True,
+        metadata={
+            "help" : ""
+        }
+    )
+    use_k_fold : bool = field(
+        default= False,
+        metadata={
+            "help" : ""
+        }
+    )
+    n_splits : int = field(
+        default= 16,
+        metadata={
+            "help" : ""
+        }
+    )
+    per_device_train_batch_size : int = field(
+        default= 32,
+        metadata={
+            "help" : ""
+        }
+    )
+    per_device_eval_batch_size : int = field(
+        default= 32,
+        metadata={
+            "help" : ""
+        }
+    )
+    gradient_accumulation_steps : int = field(
+        default= 4,
+        metadata={
+            "help" : ""
+        }
+    )
+    learning_rate : float = field(
+        default= 2e-5,
+        metadata={
+            "help" : ""
+        }
+    )
+    weight_decay : float = field(
+        default= 0.01,
+        metadata={
+            "help" : ""
+        }
+    )
+    adam_epsilon : float = field(
+        default= 1e-8,
+        metadata={
+            "help" : ""
+        }
+    )
+    num_train_epochs : int = field(
+        default= 5,
+        metadata= {
+            "help" : ""
+        }
+    )
+    logging_step : int = field(
+        default= 50,
+        metadata= {
+            "help" : ""
+        }
+    )
+    # for only Sparse Retriever
     tfidf_file : str = field(
         default = "tfidf_model.pkl",
         metadata= {
@@ -113,84 +216,12 @@ class TrainingArguments :
             "help" : ""
         }
     )
-    do_train : bool = field(
-        default= True,
-        metadata={
-            "help" : ""
-        }
-    )
-    use_k_fold : bool = field(
-        default= True,
-        metadata={
-            "help" : ""
-        }
-    )
-    n_splits : int = field(
-        default= 16,
-        metadata={
-            "help" : ""
-        }
-    )
-    per_device_train_batch_size : int = field(
-        default= 16,
-        metadata={
-            "help" : ""
-        }
-    )
-    per_device_eval_batch_size : int = field(
-        default= 16,
-        metadata={
-            "help" : ""
-        }
-    )
-    weight_decay : float = field(
-        default= 0.01,
-        metadata={
-            "help" : ""
-        }
-    )
-    learning_rate : float = field(
-        default= 2e-5,
-        metadata={
-            "help" : ""
-        }
-    )
-    adam_epsilon : float = field(
-        default= 1e-8,
-        metadata={
-            "help" : ""
-        }
-    )
-    gradient_accumulation_steps : int = field(
-        default= 1,
-        metadata={
-            "help" : ""
-        }
-    )
-    num_train_epochs : int = field(
-        default= 10,
-        metadata= {
-            "help" : ""
-        }
-    )
-    warmup_steps : int = field(
-        default= 250,
-        metadata= {
-            "help" : ""
-        }
-    )
-    logging_step : int = field(
-        default= 10,
-        metadata= {
-            "help" : ""
-        }
-    )
 
 
 @dataclass
 class SparseArguments :
     sparse_tokenizer_name : str = field(
-        default= "simple", # "huggingface tokenizer"
+        default= "klue/bert-base", # "simple", "huggingface tokenizer"
         metadata={
             "help" : ""
         }
@@ -218,65 +249,7 @@ class SparseArguments :
 
 
 @dataclass
-class EncoderArguments :
-    encoder_type : str = field(
-        default= "Bert",
-        metadata={
-            "help" : ""
-        }
-    )
-    model_name_or_path : str = field(
-        default= 'klue/bert-base',
-        metadata={
-            "help" : ""
-        }
-    )
-    embedding_dim : Optional[str] = field(
-        default= None,
-        metadata={
-            "help" : ""
-        }
-    )
-    padding : Union[bool, str] = field(
-        default= "max_length", 
-        metadata= {
-            "help" : ""
-        }
-    )
-    truncation : bool = field(
-        default= True,
-        metadata= {
-            "help" : ""
-        }
-    )
-    max_length : int = field(
-        default= 128,
-        metadata= {
-            "help" : ""
-        }
-    )
-    stride : int = field(
-        default= 64,
-        metadata= {
-            "help" : ""
-        }
-    )
-
-
-@dataclass
 class DenseArguments :
-    query_encoder : EncoderArguments = field(
-        default_factory= EncoderArguments,
-        metadata={
-            "help" : "--query_encoder.padding True "
-        }
-    )
-    passage_encoder : EncoderArguments = field(
-        default_factory= EncoderArguments,
-        metadata={
-            "help" : ""
-        }
-    )
     use_overflow : bool = field(
         default= False,
         metadata= {
@@ -308,5 +281,67 @@ class DenseArguments :
             "help" : ""
         }
     )
+    # For using pre-trained only
+    pre_trained_model_name_or_path : str = field(
+        default = "intfloat/multilingual-e5-large-instruct",
+        metadata={
+            "help" : ""
+        }
+    )
+    pre_trained_split : bool = field(
+        default= True,
+        metadata={
+            "help" : ""
+        }
+    )
+    task_description : str = field(
+        default= 'Given a web search query, retrieve relevant passages that answer the query', # ""
+        metadata={
+            "help" : ""
+        }
+    )
+    stride : int = field(
+        default= 64,
+        metadata= {
+            "help" : ""
+        }
+    )
+    
 
 
+@dataclass
+class QueryEncoderArguments :
+    query_type : str = field(
+        default= "Bert",
+        metadata={
+            "help" : ""
+        }
+    )
+    query_model_name_or_path : str = field(
+        default= 'bert-base-multilingual-cased',
+        metadata={
+            "help" : ""
+        }
+    )
+
+
+@dataclass
+class PassageEncoderArguments :
+    passage_type : str = field(
+        default="Bert",
+        metadata={
+            "help" : ""
+        }
+    )
+    passage_model_name_or_path : str = field(
+        default='bert-base-multilingual-cased',
+        metadata={
+            "help" : ""
+        }
+    )
+    passage_stride : int = field(
+        default= 64,
+        metadata= {
+            "help" : ""
+        }
+    )

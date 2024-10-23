@@ -21,28 +21,29 @@ def set_seed(seed: int = 42, deterministic = False) :
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
 
-def setup_logger(output_dir, log_file_name = "train.log", print_cli = True) :
+def setup_logger(output_dir, log_file_name = "train.log", print_cli = True, print_file = True) :
     os.makedirs(output_dir, exist_ok=True) # 폴더가 없으면 생성
     log_file = os.path.join(output_dir, log_file_name)
 
     # logger 생성
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
-
-    # handler 생성
-    stream_handler = logging.StreamHandler(sys.stdout)
-    file_handler = logging.FileHandler(log_file, mode = 'w')
-
+    
     # format 설정
     formatter = logging.Formatter("%(asctime)s - %(message)s",
                                   datefmt="%m/%d/%Y %H:%M:%S")
-    stream_handler.setFormatter(formatter)
-    file_handler.setFormatter(formatter)
 
-    # logger에 handler 추가
-    if print_cli :
-        logger.addHandler(stream_handler)
-    logger.addHandler(file_handler)
+    # handler 생성
+    if not logger.hasHandlers() :
+        if print_cli : 
+            stream_handler = logging.StreamHandler(sys.stdout)
+            stream_handler.setFormatter(formatter)
+            logger.addHandler(stream_handler)
+        
+        if print_file : 
+            file_handler = logging.FileHandler(log_file, mode = 'w')
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
 
     return logger
     
@@ -52,8 +53,8 @@ def timer(logger, name) :
     yield
     logger.info(f'[{name}] done in {time.time() - start:.2f} seconds')
 
-def get_docs_id(all_context, ground_context) :
-    context_to_id = {doc['context'] : doc['id'] for doc in all_context}
+def get_docs_id(corpus, ground_context) :
+    context_to_id = {context: id for id, context in corpus.items()}
 
     doc_ids = []
     for context in ground_context :

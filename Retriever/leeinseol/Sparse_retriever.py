@@ -6,8 +6,28 @@ from rank_bm25 import BM25Okapi
 from scipy.sparse import load_npz, save_npz
 from sklearn.feature_extraction.text import TfidfVectorizer
 from transformers import AutoTokenizer
+import torch
 
 from utils_retriever import timer
+
+
+def simple_tokenizer(text) :
+    return text.lower().split()
+
+class HuggingFaceTokenizerWrapper:
+    def __init__(self, tokenizer):
+        self.tokenizer = tokenizer
+
+    def __call__(self, text):
+        return self.tokenizer.encode(text, add_special_tokens=False)
+
+def get_tokenizer_func(sparse_args):
+    if sparse_args.sparse_tokenizer_name == "simple":
+        return simple_tokenizer
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(sparse_args.sparse_tokenizer_name, trust_remote_code = True)
+        # 클래스 인스턴스를 반환
+        return HuggingFaceTokenizerWrapper(tokenizer)
 
 
 class TFIDFRetriever :
@@ -15,12 +35,13 @@ class TFIDFRetriever :
         tokenizer_func = get_tokenizer_func(sparse_args) 
         self.vectorizer = TfidfVectorizer(tokenizer=tokenizer_func, ngram_range=sparse_args.n_gram, token_pattern = None)
         self.sparse_matrix = None
+        self.document_mappings = None
         self.logger = logger
 
     def fit(self, corpus, training_args) :
-        corpus_list = []
-        for i in range(len(corpus)) :
-            corpus_list.append(corpus[i]['context'])
+        self.document_mappings = [id for id in corpus.keys()]
+
+        corpus_list = [corpus[key] for key in corpus.keys()]
 
         model_path = os.path.join(training_args.output_dir, training_args.tfidf_file)
         if training_args.do_train :
@@ -47,26 +68,32 @@ class TFIDFRetriever :
             for result in results :
                 sorted_result = np.argsort(-result.data)
                 doc_scores = result.data[sorted_result][:top_k].tolist()
-                doc_ids = result.indices[sorted_result][:top_k].tolist()
+                doc_indices = result.indices[sorted_result][:top_k].tolist()
                 scores.append(doc_scores)
-                indices.append(doc_ids)
+                indices.append(doc_indices)
+        
+        doc_ids = []
+        for i in range(len(indices)) : 
+            doc_ids.append([self.document_mappings[idx] for idx in indices[i]])
 
-        return scores, indices
+        return scores, doc_ids
 
     def save_model(self, save_path) :
         with open(save_path, "wb") as file :
             pickle.dump({
                 "vectorizer" : self.vectorizer,
-                "sparse_matrix" : self.sparse_matrix
+                "sparse_matrix" : self.sparse_matrix,
+                "document_mappings" : self.document_mappings
             }, file)
-        self.logger.info(f"TF-IDF model and Sparse matrix are saved in {save_path}")
+        self.logger.info(f"TF-IDF model, Sparse matrix and Ids mapped documents are saved in {save_path}")
 
     def load_model(self, load_path) :
         with open(load_path, "rb") as file :
             data = pickle.load(file)
             self.vectorizer = data['vectorizer']
             self.sparse_matrix = data['sparse_matrix']
-        self.logger.info(f"TF-IDF model and Sparse matrix are loaded at {load_path}")
+            self.document_mappings = data['document_mappings']
+        self.logger.info(f"TF-IDF model, Sparse matrix and Ids mapped documents are loaded at {load_path}")
 
 
 # BM-25
@@ -78,12 +105,12 @@ class BM25Retriever :
         self.tokenized_corpus = None
         self.k1 = sparse_args.k1
         self.b = sparse_args.b
+        self.document_mappings = None
     
     def fit(self, corpus, training_args) :
-        corpus_list = []
-        for i in range(len(corpus)) :
-            corpus_list.append(corpus[i]['context'])
+        self.document_mappings = [id for id in corpus.keys()]
 
+        corpus_list = [corpus[key] for key in corpus.keys()]
         model_path = os.path.join(training_args.output_dir, training_args.bm25_file)
         if training_args.do_train :
             with timer(self.logger, "Tokenizing Corpus") :
@@ -95,46 +122,65 @@ class BM25Retriever :
         else :
             self.load_model(model_path)
 
-    def retrieve(self, queries, top_k, batch_size) :
+    def retrieve(self, queries, top_k, batch_size, hybrid = False) :
         assert self.bm25 is not None, "BM25 model hasn't been fitted yet."
         assert batch_size <= len(queries), "Batch size must smaller then length of queries."
 
         scores = []
-        indices = []
+        # indices = []
         for i in range(0, len(queries), batch_size) :
             batch_queries = queries[i:i+batch_size]
             tokenized_queries = [self.tokenizer_func(query) for query in batch_queries]
 
             for query in tokenized_queries :
                 query_scores = self.bm25.get_scores(query)
+                scores.append(torch.tensor(query_scores).unsqueeze(0))
 
-                sorted_indices = np.argsort(query_scores)[-top_k:][::-1]
-                doc_scores = [query_scores[idx] for idx in sorted_indices]
-                scores.append(doc_scores)
-                indices.append(sorted_indices.tolist())
+                # sorted_indices = np.argsort(query_scores)[-top_k:][::-1]
+                # doc_scores = [query_scores[idx] for idx in sorted_indices]
+                # scores.append(doc_scores)
+                # indices.append(sorted_indices.tolist())
         
-        return scores, indices
+        scores = torch.cat(scores, dim = 0)
+
+        if hybrid :
+            return scores.tolist(), self.document_mappings
+
+        scores, indices = scores.topk(top_k, dim = 1)
+        doc_ids = []
+        for i in range(len(indices)) : 
+            doc_ids.append([self.document_mappings[idx.item()] for idx in indices[i].reshape(-1)])
+
+        return scores.tolist(), doc_ids
+    
+    def get_all_scores(self, queries, batch_size) :
+        assert self.bm25 is not None, "BM25 model hasn't been fitted yet."
+        assert batch_size <= len(queries), "Batch size must smaller then length of queries."
+
+        scores = []
+        for i in range(0, len(queries), batch_size) :
+            batch_queries = queries[i:i+batch_size]
+            tokenized_queries = [self.tokenizer_func(query) for query in batch_queries]
+
+            for query in tokenized_queries :
+                query_scores = self.bm25.get_scores(query)
+                scores.append(query_scores)
+        
+        return scores, self.document_mappings
+
     def save_model(self, save_path) :
         with open(save_path, "wb") as file :
-            pickle.dump(self.bm25, file)
-    
+            pickle.dump({
+                "bm-25" : self.bm25,
+                "document_mappings" : self.document_mappings
+            }, file)
+        self.logger.info(f"BM-25 model and Ids mapped documents are saved in {save_path}")
+            
     def load_model(self, load_path) :
         with open(load_path, "rb") as file :
-            self.bm25 = pickle.load(file)
+            data = pickle.load(file)
+            self.bm25 = data['bm-25']
+            self.document_mappings = data['document_mappings']
+        self.logger.info(f"BM-25 model and Ids mapped documents are loaded at {load_path}")
 
 
-
-def simple_tokenizer(text) :
-    return text.lower().split()
-
-def huggingface_tokenizer(tokenizer) :
-    def tokenize(text) : 
-        return tokenizer.tokenize(text, add_special_tokens = False)
-    return tokenize
-
-def get_tokenizer_func(sparse_args) :
-    if sparse_args.sparse_tokenizer_name == "simple" :
-        return simple_tokenizer
-    else :
-        tokenizer = AutoTokenizer.from_pretrained(sparse_args.sparse_tokenizer_name)
-        return huggingface_tokenizer(tokenizer)
