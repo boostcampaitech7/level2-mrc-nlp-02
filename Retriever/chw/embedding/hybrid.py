@@ -155,30 +155,3 @@ class HybridLogisticRetrieval:
         combined_indices = np.argsort(hybrid_scores)[::-1][:topk]
 
         return combined_indices, hybrid_scores
-
-    def get_relevant_doc_bulk(self, queries, topk):
-        min_topk = pow(2, self.num_features)
-
-        dense_indices = self.dense_retriever.get_relevant_doc_bulk(queries, k=topk)
-        sparse_scores, sparse_indices = self.sparse_retriever.get_relevant_doc_bulk(queries, max(min_topk, topk))
-        sparse_scores = np.array(sparse_scores)
-
-        feature_vectors = []
-        for sparse_score in sparse_scores:
-            feature_vector = [sparse_score[: pow(2, i)] for i in range(1, self.num_features + 1)]
-            feature_vector = list(map(lambda x: x.mean(), feature_vector))
-            feature_vector = softmax(feature_vector)
-            feature_vectors.append(feature_vector)
-
-        labels = self.logistic.predict(feature_vectors)
-
-        doc_scores, doc_indices = [], []
-        for query_id in range(len(queries)):
-            if labels[query_id] == 1:
-                doc_scores.append(sparse_scores[query_id])
-                doc_indices.append(sparse_indices[query_id])
-            else:
-                # doc_scores.append(dense_scores[query_id])
-                doc_indices.append(dense_indices[query_id])
-
-        return doc_scores, doc_indices
