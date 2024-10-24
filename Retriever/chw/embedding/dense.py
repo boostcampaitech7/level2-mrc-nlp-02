@@ -234,7 +234,7 @@ class DenseRetrieval:
 
         if isinstance(query_or_dataset, str):
 
-            results = self.get_relevant_doc(query_or_dataset, k=topk)
+            scores, results = self.get_relevant_doc(query_or_dataset, k=topk)
             print("[Search query]\n", query_or_dataset, "\n")
             indices = results.tolist()
             print(results)
@@ -249,7 +249,7 @@ class DenseRetrieval:
             # Retrieve한 Passage를 pd.DataFrame으로 반환합니다.
             total = []
             with timer("bulk query exhaustive search"):
-                results = self.get_relevant_doc_bulk(query_or_dataset["question"], k=topk)
+                scores, results = self.get_relevant_doc_bulk(query_or_dataset["question"], k=topk)
                 indices = results
                 print("indices length", len(indices))
             for idx, example in enumerate(tqdm(query_or_dataset, desc="Dense retrieval: ")):
@@ -328,7 +328,7 @@ class DenseRetrieval:
         ## get_passage_embedding()로 미리 생성한 passage embedding(p_embs)를 활용해서 내적곱을 합니다.
         dot_prod_scores = torch.matmul(q_emb, torch.transpose(self.p_embs, 0, 1))
         rank = torch.argsort(dot_prod_scores, dim=1, descending=True).squeeze()
-        return rank[:k]
+        return dot_prod_scores.squeeze()[:k], rank[:k]
 
     def get_relevant_doc_bulk(self, queries, k=1, args=None, p_encoder=None, q_encoder=None):
         print("bulk queries : ", queries)
@@ -341,6 +341,7 @@ class DenseRetrieval:
             q_encoder = self.q_encoder
 
         results = []
+        scores = []
         with torch.no_grad():
             q_encoder.eval()
 
@@ -350,8 +351,9 @@ class DenseRetrieval:
                 ## get_passage_embedding()로 미리 생성한 passage embedding(p_embs)를 활용해서 내적곱을 합니다.
                 dot_prod_scores = torch.matmul(q_emb, torch.transpose(self.p_embs, 0, 1))
                 rank = torch.argsort(dot_prod_scores, dim=1, descending=True).squeeze()
+                scores.append(dot_prod_scores[:k])
                 results.append(rank[:k])
 
         print("bulk results : ", results)
         print("bulk results len : ", len(results))
-        return results
+        return scores, results
