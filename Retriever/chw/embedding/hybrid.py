@@ -68,21 +68,37 @@ class HybridLogisticRetrieval:
 
         return logistic
 
-    def logistic_train_ver2(self, labels, topk=1):
+    def logistic_train_ver2(self, topk=1):
 
         queries = self.train_dataset["question"]
+        org_contexts = self.train_dataset["context"]
+
         sparse_features = []
         dense_features = []
-        for query in tqdm(queries, desc="hybrid logistic train"):
+        labels = []
+        for query, org_context in tqdm(zip(queries, org_contexts), desc="hybrid logistic train"):
             sparse_scores, sparse_indices = self.sparse_retriever.get_relevant_doc(query, k=topk, method="bm25")
             dense_scores, dense_indices = self.dense_retriever.get_relevant_doc(query, k=topk)
             print("sparse_scores", sparse_scores)
             print("len(sparse_scores)", len(sparse_scores))
             print("dense_scores", dense_scores)
             print("len(dense_scores)", dense_scores.shape)
-            sparse_features.append(sparse_scores)
-            dense_features.append(dense_scores)
+            sparse_features.append(np.array(sparse_scores).mean())
+            dense_features.append(dense_scores.numpy().mean())
 
+            label = 0
+            y = -1
+            print("sparse_indices", sparse_indices)
+            context_list = [self.contexts[i] for i in sparse_indices]
+            if org_context in context_list:
+                y = list(context_list).index(org_context)
+            print("org_context top index in wiki(y) : ", y)
+            if y != -1 and y < self.topk_limit:
+                label = 1
+
+            labels.append(label)
+
+        print(sparse_features, dense_features)
         X = np.stack([sparse_features, dense_features], axis=-1)
         logistic = LogisticRegression()
         logistic.fit(X, labels)
