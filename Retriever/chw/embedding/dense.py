@@ -351,7 +351,7 @@ class DenseRetrieval:
                 ## get_passage_embedding()로 미리 생성한 passage embedding(p_embs)를 활용해서 내적곱을 합니다.
                 dot_prod_scores = torch.matmul(q_emb, torch.transpose(self.p_embs, 0, 1))
                 rank = torch.argsort(dot_prod_scores, dim=1, descending=True).squeeze()
-                scores.append(dot_prod_scores[:k])
+                scores.append(dot_prod_scores.squeeze()[:k])
                 results.append(rank[:k])
 
         print("bulk results : ", results)
