@@ -24,7 +24,7 @@ def MRR(results: pd.DataFrame):
     return sum / len(results)
 
 
-def Recall(results: pd.DataFrame):
+def TopkHit(results: pd.DataFrame):
     sum = 0
     for idx, (index, row) in enumerate(results.iterrows()):
         for context in row["context"]:
