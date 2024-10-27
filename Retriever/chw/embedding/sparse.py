@@ -52,11 +52,7 @@ class SparseRetrieval:
         self.ids = list(range(len(self.contexts)))
 
         # Transform by vectorizer
-        self.tfidfv = TfidfVectorizer(
-            tokenizer=tokenize_fn,
-            ngram_range=(1, 2),
-            max_features=50000,
-        )
+        self.tfidfv = TfidfVectorizer(tokenizer=tokenize_fn, ngram_range=(1, 2))
         self.tokenize_fn = tokenize_fn
         self.bm25 = None
         self.p_embedding = None  # get_sparse_embedding()로 생성합니다
