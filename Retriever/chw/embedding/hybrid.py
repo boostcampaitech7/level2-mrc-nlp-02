@@ -22,7 +22,6 @@ class HybridLogisticRetrieval:
         self.context_path = context_path
         self.train_dataset = train_dataset
         self.logistic = None
-        self.topk_limit = 10
 
         self.sparse_retriever = sparse_retriever
         self.dense_retriever = dense_retriever
@@ -48,11 +47,11 @@ class HybridLogisticRetrieval:
         org_contexts = self.train_dataset["context"]
 
         # doc_scores, doc_indices = np.array(sparse_scores), np.array(sparse_indices)
-
+        top_k_limit = 5
         X, Y = [], []
 
         for query, org_context in tqdm(zip(queries, org_contexts), desc="hybrid logistic train"):
-            sparse_scores, sparse_indices = self.sparse_retriever.get_relevant_doc(query, k=64, method="bm25")
+            sparse_scores, sparse_indices = self.sparse_retriever.get_relevant_doc(query, k=5, method="bm25")
 
             feature_vector = [sparse_scores[: min(pow(2, i), len(sparse_scores))] for i in range(1, 6)]
             feature_vector = list(map(lambda x: x.mean(), feature_vector))
@@ -66,7 +65,7 @@ class HybridLogisticRetrieval:
             if org_context in context_list:
                 org_context_idx = context_list.index(org_context)
             print("org_context top index in wiki(y) : ", org_context_idx)
-            if org_context_idx != -1:
+            if org_context_idx != -1 and org_context_idx <= top_k_limit:
                 label = 1
 
             X.append(feature_vector)
