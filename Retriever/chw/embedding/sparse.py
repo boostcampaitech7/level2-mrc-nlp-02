@@ -52,11 +52,7 @@ class SparseRetrieval:
         self.ids = list(range(len(self.contexts)))
 
         # Transform by vectorizer
-        self.tfidfv = TfidfVectorizer(
-            tokenizer=tokenize_fn,
-            ngram_range=(1, 2),
-            max_features=50000,
-        )
+        self.tfidfv = TfidfVectorizer(tokenizer=tokenize_fn, ngram_range=(1, 2))
         self.tokenize_fn = tokenize_fn
         self.bm25 = None
         self.p_embedding = None  # get_sparse_embedding()로 생성합니다
@@ -194,7 +190,7 @@ class SparseRetrieval:
                     "question": example["question"],
                     "id": example["id"],
                     # Retrieve한 Passage의 id, context를 반환합니다.
-                    "context": " ".join([self.contexts[pid] for pid in doc_indices[idx]]),
+                    "context": [self.contexts[pid] for pid in doc_indices[idx]],
                 }
                 if "context" in example.keys() and "answers" in example.keys():
                     # validation 데이터를 사용하면 ground_truth context와 answer도 반환합니다.
@@ -280,8 +276,7 @@ class SparseRetrieval:
                 with timer("query bm25 scores"):
                     bm25_scores = self.bm25.get_scores(tokenized_query)
                     print(tokenized_query, bm25_scores)
-                # if not isinstance(bm25_scores, np.ndarray):
-                #     result = result.toarray()
+
                 print(bm25_scores)
 
                 doc_indice = bm25_scores.argsort()[::-1][:k]

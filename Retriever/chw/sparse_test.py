@@ -18,6 +18,7 @@ from transformers import AutoTokenizer
 
 # 커스텀
 from Retriever.chw.embedding.sparse import SparseRetrieval
+from Retriever.chw.utils.util import MRR, TopkHit
 
 seed = 2024
 random.seed(seed)  # python random seed 고정
@@ -103,11 +104,9 @@ if __name__ == "__main__":
         # print("single with no faiss - query scores, indices", scores, indices)
         with timer("bulk query by exhaustive search"):
             df = retriever.retrieve(full_ds, topk=args.topk, method=args.method)
-            df["correct"] = df.apply(lambda row: row["context"].find(row["original_context"]) != -1, axis=1)
+            # df["correct"] = df.apply(lambda row: row["context"].find(row["original_context"]) != -1, axis=1)
 
             print("idx < 10 context compare", df[:10]["original_context"], df[:10]["context"])
 
-            print(
-                "correct retrieval result by exhaustive search",
-                df["correct"].sum() / len(df),
-            )
+            print("correct retrieval result by exhaustive search", TopkHit(df))
+            print("MRR = ", MRR(df))
