@@ -51,7 +51,7 @@ class HybridLogisticRetrieval:
         X, Y = [], []
 
         for query, org_context in tqdm(zip(queries, org_contexts), desc="hybrid logistic train"):
-            sparse_scores, sparse_indices = self.sparse_retriever.get_relevant_doc(query, k=5, method="bm25")
+            sparse_scores, sparse_indices = self.sparse_retriever.get_relevant_doc(query, k=64, method="bm25")
 
             feature_vector = [sparse_scores[: min(pow(2, i), len(sparse_scores))] for i in range(1, 6)]
             feature_vector = F.softmax(torch.tensor(list(map(lambda x: x.mean(), feature_vector))), dim=-1)
