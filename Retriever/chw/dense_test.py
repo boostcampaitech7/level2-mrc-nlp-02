@@ -18,7 +18,7 @@ from transformers import AutoTokenizer, TrainingArguments
 # 커스텀
 from Retriever.chw.embedding.dense import DenseRetrieval
 from Retriever.chw.model.encoder import BertEncoder
-
+from Retriever.chw.utils.util import MRR, TopkHit
 
 seed = 2024
 random.seed(seed)  # python random seed 고정
@@ -110,14 +110,11 @@ if __name__ == "__main__":
     # print("single with no faiss - query scores, indices", scores, indices)
     with timer("bulk query by exhaustive search"):
         results = retriever.retrieve(query_or_dataset=full_ds, topk=args.topk)
-        results["correct"] = results.apply(lambda row: row["context"].find(row["original_context"]) != -1, axis=1)
 
         print("idx < 10 context compare", results[:10]["original_context"], results[:10]["context"])
 
-        print(
-            "correct retrieval result by exhaustive search",
-            results["correct"].sum() / len(results),
-        )
+        print("correct retrieval result by exhaustive search", TopkHit(results))
+        print("MRR = ", MRR(results))
 
     # df = retriever.retrieve(full_ds, topk=args.topk, method=args.method)
     # df["correct"] = df.apply(lambda row: row["context"].find(row["original_context"]) != -1, axis=1)
