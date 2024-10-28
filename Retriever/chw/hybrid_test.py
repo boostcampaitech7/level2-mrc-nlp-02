@@ -20,6 +20,7 @@ from Retriever.chw.embedding.sparse import SparseRetrieval
 from Retriever.chw.embedding.dense import DenseRetrieval
 from Retriever.chw.model.encoder import BertEncoder
 from Retriever.chw.embedding.hybrid import HybridLogisticRetrieval
+from Retriever.chw.utils.util import MRR, TopkHit
 
 seed = 2024
 random.seed(seed)  # python random seed 고정
