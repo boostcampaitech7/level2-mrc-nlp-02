@@ -54,9 +54,7 @@ class HybridLogisticRetrieval:
             sparse_scores, sparse_indices = self.sparse_retriever.get_relevant_doc(query, k=5, method="bm25")
 
             feature_vector = [sparse_scores[: min(pow(2, i), len(sparse_scores))] for i in range(1, 6)]
-            feature_vector = list(map(lambda x: x.mean(), feature_vector))
-            feature_vector = torch.tensor(feature_vector)
-            feature_vector = F.softmax(feature_vector, dim=-1)
+            feature_vector = F.softmax(torch.tensor(list(map(lambda x: x.mean(), feature_vector))), dim=-1)
 
             label = 0
             org_context_idx = -1
@@ -205,9 +203,7 @@ class HybridLogisticRetrieval:
         feature_vectors = []
         for sparse_score in sparse_scores:
             feature_vector = [sparse_score[: min(pow(2, i), len(sparse_score))] for i in range(1, 6)]
-            feature_vector = list(map(lambda x: x.mean(), feature_vector))
-            feature_vector = torch.tensor(feature_vector)
-            feature_vector = F.softmax(feature_vector)
+            feature_vector = F.softmax(torch.tensor(list(map(lambda x: x.mean(), feature_vector))), dim=-1)
 
             feature_vectors.append(feature_vector)
 
