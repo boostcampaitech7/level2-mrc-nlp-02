@@ -8,7 +8,8 @@ import pandas as pd
 from typing import List, NoReturn, Optional, Tuple, Union
 
 import numpy as np
-from scipy.special import softmax
+import torch
+import torch.nn.functional as F
 from sklearn.linear_model import LogisticRegression
 from datasets import load_from_disk, concatenate_datasets, Dataset
 from Retriever.chw.utils.util import timer
@@ -21,8 +22,7 @@ class HybridLogisticRetrieval:
         self.context_path = context_path
         self.train_dataset = train_dataset
         self.logistic = None
-        self.num_features = 3
-        self.kbound = 3
+        self.topk_limit = 10
 
         self.sparse_retriever = sparse_retriever
         self.dense_retriever = dense_retriever
@@ -34,37 +34,46 @@ class HybridLogisticRetrieval:
         print(f"Lengths of unique contexts : {len(self.contexts)}")
         self.ids = list(range(len(self.contexts)))
 
-    def logistic_train(self):
+    def logistic_train_with_ditribution(self):
         # train_dataset = concatenate_datasets([datasets["train"], datasets["validation"]])
+        """_summary_
+            이 훈련 방법은 검색 결과의 분포를 특징으로 삼아 분류기를 학습합니다.
+            상위 64개의 문서를 뽑아내여 각 문서를 2^i 승으로 6까지
+        Returns:
+            _type_: _description_
+        """
+        queries = self.train_dataset["question"]
 
         queries = self.train_dataset["question"]
-        doc_scores, doc_indices = self.sparse_retriever.get_relevant_doc_bulk(queries, topk=10)
-        doc_scores, doc_indices = np.array(doc_scores), np.array(doc_indices)
+        org_contexts = self.train_dataset["context"]
 
-        contexts = np.array(self.sparse_retriever.contexts)
+        # doc_scores, doc_indices = np.array(sparse_scores), np.array(sparse_indices)
 
-        train_x, train_y = [], []
+        X, Y = [], []
 
-        for idx in tqdm(range(len(doc_scores))):
-            doc_index = doc_indices[idx]
-            org_context = self.train_dataset["context"][idx]
+        for query, org_context in tqdm(zip(queries, org_contexts), desc="hybrid logistic train"):
+            sparse_scores, sparse_indices = self.sparse_retriever.get_relevant_doc(query, k=64, method="bm25")
 
-            feature_vector = [doc_scores[idx][: pow(2, i)] for i in range(1, self.num_features + 1)]
+            feature_vector = [sparse_scores[: min(pow(2, i), len(sparse_scores))] for i in range(1, 6)]
             feature_vector = list(map(lambda x: x.mean(), feature_vector))
-            feature_vector = softmax(feature_vector)
+            feature_vector = torch.tensor(feature_vector)
+            feature_vector = F.softmax(feature_vector, dim=-1)
 
             label = 0
-            y = -1
-            if org_context in contexts[doc_index]:
-                y = list(contexts[doc_index]).index(org_context)
-            if y != -1 and y < self.kbound:
+            org_context_idx = -1
+            print("sparse_indices", sparse_indices)
+            context_list = [self.contexts[i] for i in sparse_indices]
+            if org_context in context_list:
+                org_context_idx = context_list.index(org_context)
+            print("org_context top index in wiki(y) : ", org_context_idx)
+            if org_context_idx != -1:
                 label = 1
 
-            train_x.append(feature_vector)
-            train_y.append(label)
+            X.append(feature_vector)
+            Y.append(label)
 
         logistic = LogisticRegression()
-        logistic.fit(train_x, train_y)
+        logistic.fit(X, Y)
 
         return logistic
 
@@ -113,7 +122,7 @@ class HybridLogisticRetrieval:
             with open(model_path, "rb") as f:
                 self.logistic = pickle.load(f)
         else:
-            self.logistic = self.logistic_train_ver2(labels=labels, topk=topk)
+            self.logistic = self.logistic_train_with_ditribution()
             with open(model_path, "wb") as f:
                 pickle.dump(self.logistic, f)
 
@@ -135,18 +144,23 @@ class HybridLogisticRetrieval:
             # Retrieve한 Passage를 pd.DataFrame으로 반환합니다.
             total = []
             with timer("bulk query exhaustive search"):
-                scores, results = self.get_relevant_doc_bulk_ver2(query_or_dataset["question"], topk=topk)
-                indices = results
-                print("indices length", len(indices))
-            for idx, example in enumerate(tqdm(query_or_dataset, desc="Dense retrieval: ")):
-                print("idx - ", idx)
+                label_indices, sparse_indices, dense_indices = self.get_relevant_doc_bulk_with_distribution(query_or_dataset["question"], topk=topk)
+
+                print("indices length", len(label_indices), len(sparse_indices), len(dense_indices))
+                print("label indices  ---------", label_indices)
+                assert len(label_indices) == len(sparse_indices), "레이블과 임베딩 인덱스 길이가 다릅니다."
+            for idx, example in enumerate(tqdm(query_or_dataset, desc="Hybrid retrieval: ")):
+                # print("idx - ", idx)
+                # print("label_indices[idx] - ", label_indices[idx])
+                indices = sparse_indices[idx] if label_indices[idx] == 1 else dense_indices[idx]
+                # print("indices - ", indices)
 
                 tmp = {
                     # Query와 해당 id를 반환합니다.
                     "question": example["question"],
                     "id": example["id"],
                     # Retrieve한 Passage의 id, context를 반환합니다.
-                    "context": " ".join([self.contexts[pid] for pid in indices[idx]]),
+                    "context": [self.contexts[pid] for pid in indices],
                 }
                 if "context" in example.keys() and "answers" in example.keys():
                     # validation 데이터를 사용하면 ground_truth context와 answer도 반환합니다.
@@ -164,10 +178,45 @@ class HybridLogisticRetrieval:
 
         sparse_scores, sparse_indices = self.sparse_retriever.get_relevant_doc_bulk(queries, k=topk, method="bm25")
         dense_scores, dense_indices = self.dense_retriever.get_relevant_doc_bulk(queries, k=topk)
+        sparse_convert = [np.array(score).mean() for score in sparse_scores]
+        dense_convert = [score.numpy().mean() for score in dense_scores]
+        print(sparse_scores[:2], sparse_convert[:2])
+        print(dense_scores[:2], dense_convert[:2])
+        feature_vectors = []
+        for sparse_score, dense_score in zip(sparse_convert, dense_convert):
+            features = np.stack([sparse_score, dense_score], axis=-1)
+            feature_vectors.append(features)
+        # features = np.stack([sparse_convert, dense_convert], axis=-1)
+        # hybrid_scores = self.logistic.predict_proba(features)[:, 1]
 
-        features = np.stack([sparse_scores, dense_scores], axis=-1)
-        hybrid_scores = self.logistic.predict_proba(features)[:, 1][:topk]
+        # label_indices = np.argsort(hybrid_scores)[::-1
+        label_list = self.logistic.predict(feature_vectors)
+        # print("*" * 20, "hybrid_scores", "*" * 20)
+        # print(hybrid_scores)
+        # print(len(hybrid_scores))
+        print("*" * 20, "label_indices", "*" * 20)
+        print(label_list)
+        print(len(label_list))
+        return label_list, sparse_indices, dense_indices
 
-        combined_indices = np.argsort(hybrid_scores)[::-1][:topk]
+    def get_relevant_doc_bulk_with_distribution(self, queries, topk=1):
+        sparse_scores, sparse_indices = self.sparse_retriever.get_relevant_doc_bulk(queries, k=topk, method="bm25")
+        dense_scores, dense_indices = self.dense_retriever.get_relevant_doc_bulk(queries, k=topk)
+        # print(sparse_scores[:2])
+        feature_vectors = []
+        for sparse_score in sparse_scores:
+            feature_vector = [sparse_score[: min(pow(2, i), len(sparse_score))] for i in range(1, 6)]
+            feature_vector = list(map(lambda x: x.mean(), feature_vector))
+            feature_vector = torch.tensor(feature_vector)
+            feature_vector = F.softmax(feature_vector)
 
-        return combined_indices, hybrid_scores
+            feature_vectors.append(feature_vector)
+
+        label_list = self.logistic.predict(feature_vectors)
+        # print("*" * 20, "hybrid_scores", "*" * 20)
+        # print(hybrid_scores)
+        # print(len(hybrid_scores))
+        print("*" * 20, "label_indices", "*" * 20)
+        print(label_list)
+        print(len(label_list))
+        return label_list, sparse_indices, dense_indices
