@@ -54,7 +54,7 @@ class DenseRetrieval:
 
         if tokenizer is None:
             tokenizer = self.tokenizer
-        # print(self.dataset.keys())
+
         # 1. In-Batch-Negative 만들기
         # CORPUS를 np.array로 변환해줍니다.
         corpus = np.array(list(set([example for example in dataset["context"]])))
@@ -162,7 +162,7 @@ class DenseRetrieval:
         torch.cuda.empty_cache()
 
         train_iterator = tqdm(range(int(args.num_train_epochs)), desc="Epoch")
-        # for _ in range(int(args.num_train_epochs)):
+
         for _ in train_iterator:
 
             with tqdm(self.train_dataloader, unit="batch") as tepoch:
@@ -299,7 +299,7 @@ class DenseRetrieval:
                     p_inputs = {"input_ids": batch[0], "attention_mask": batch[1], "token_type_ids": batch[2]}
                     p_emb = p_encoder(**p_inputs).to("cpu")
                     p_embs.append(p_emb)
-            # print([p.shape for p in p_embs])
+
             p_embs = torch.stack(p_embs, dim=0).view(len(self.passage_dataloader.dataset), -1)  # (num_passage, emb_dim)
             self.p_embs = p_embs
 

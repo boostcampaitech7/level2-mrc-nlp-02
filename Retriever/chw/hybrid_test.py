@@ -74,10 +74,6 @@ if __name__ == "__main__":
         use_fast=False,
     )
 
-    # 메모리가 부족한 경우 일부만 사용하세요 !
-    # num_sample = 1500
-    # sample_idx = np.random.choice(range(len(train_dataset)), num_sample)
-    # train_dataset = train_dataset[sample_idx]
     train_dataset = org_dataset
 
     training_args = TrainingArguments(
@@ -129,12 +125,3 @@ if __name__ == "__main__":
 
         print("correct retrieval result by exhaustive search", TopkHit(results))
         print("MRR = ", MRR(results))
-    # df = retriever.retrieve(full_ds, topk=args.topk, method=args.method)
-    # df["correct"] = df.apply(lambda row: row["context"].find(row["original_context"]) != -1, axis=1)
-
-    # print("idx < 10 context compare", df[:10]["original_context"], df[:10]["context"])
-
-    # print(
-    #     "correct retrieval result by exhaustive search",
-    #     df["correct"].sum() / len(df),
-    # )

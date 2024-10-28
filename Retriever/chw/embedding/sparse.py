@@ -276,8 +276,7 @@ class SparseRetrieval:
                 with timer("query bm25 scores"):
                     bm25_scores = self.bm25.get_scores(tokenized_query)
                     print(tokenized_query, bm25_scores)
-                # if not isinstance(bm25_scores, np.ndarray):
-                #     result = result.toarray()
+
                 print(bm25_scores)
 
                 doc_indice = bm25_scores.argsort()[::-1][:k]

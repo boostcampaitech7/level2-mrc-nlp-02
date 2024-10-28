@@ -128,15 +128,6 @@ class HybridLogisticRetrieval:
     def retrieve(self, query_or_dataset: Union[str, Dataset], topk: Optional[int] = 1) -> Union[Tuple[List, List], pd.DataFrame]:
         if isinstance(query_or_dataset, str):
             raise NotImplementedError
-            # scores, results = self.get_relevant_doc(query_or_dataset, k=topk)
-            # print("[Search query]\n", query_or_dataset, "\n")
-            # indices = results.tolist()
-            # print(results)
-            # for i, idx in enumerate(indices):
-            #     print(f"Top-{i+1} passage with index {idx}")
-            #     print(self.contexts[idx])
-
-            # return [self.contexts[idx] for idx in indices]
 
         elif isinstance(query_or_dataset, Dataset):
 
@@ -149,10 +140,7 @@ class HybridLogisticRetrieval:
                 print("label indices  ---------", label_indices)
                 assert len(label_indices) == len(sparse_indices), "레이블과 임베딩 인덱스 길이가 다릅니다."
             for idx, example in enumerate(tqdm(query_or_dataset, desc="Hybrid retrieval: ")):
-                # print("idx - ", idx)
-                # print("label_indices[idx] - ", label_indices[idx])
                 indices = sparse_indices[idx] if label_indices[idx] == 1 else dense_indices[idx]
-                # print("indices - ", indices)
 
                 tmp = {
                     # Query와 해당 id를 반환합니다.
@@ -185,10 +173,7 @@ class HybridLogisticRetrieval:
         for sparse_score, dense_score in zip(sparse_convert, dense_convert):
             features = np.stack([sparse_score, dense_score], axis=-1)
             feature_vectors.append(features)
-        # features = np.stack([sparse_convert, dense_convert], axis=-1)
-        # hybrid_scores = self.logistic.predict_proba(features)[:, 1]
 
-        # label_indices = np.argsort(hybrid_scores)[::-1
         label_list = self.logistic.predict(feature_vectors)
         # print("*" * 20, "hybrid_scores", "*" * 20)
         # print(hybrid_scores)
